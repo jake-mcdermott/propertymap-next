@@ -1,0 +1,680 @@
+{
+  "P43": {
+    "county": "Cork"
+  },
+  "T23": {
+    "county": "Cork"
+  },
+  "D11": {
+    "county": "Dublin"
+  },
+  "H91": {
+    "county": "Galway"
+  },
+  "N39": {
+    "county": "Longford"
+  },
+  "W12": {
+    "county": "Kildare"
+  },
+  "N41": {
+    "county": "Leitrim"
+  },
+  "F93": {
+    "county": "Donegal"
+  },
+  "D22": {
+    "county": "Dublin"
+  },
+  "P56": {
+    "county": "Cork"
+  },
+  "A84": {
+    "county": "Meath"
+  },
+  "K67": {
+    "county": "Dublin"
+  },
+  "R35": {
+    "county": "Offaly"
+  },
+  "H14": {
+    "county": "Cavan"
+  },
+  "V15": {
+    "county": "Clare"
+  },
+  "A75": {
+    "county": "Monaghan"
+  },
+  "P12": {
+    "county": "Cork"
+  },
+  "V94": {
+    "county": "Limerick"
+  },
+  "A83": {
+    "county": "Meath"
+  },
+  "D06": {
+    "county": "Dublin"
+  },
+  "W23": {
+    "county": "Kildare"
+  },
+  "E45": {
+    "county": "Tipperary"
+  },
+  "D24": {
+    "county": "Dublin"
+  },
+  "A98": {
+    "county": "Wicklow"
+  },
+  "P31": {
+    "county": "Cork"
+  },
+  "V23": {
+    "county": "Kerry"
+  },
+  "D07": {
+    "county": "Dublin"
+  },
+  "C15": {
+    "county": "Meath"
+  },
+  "X35": {
+    "county": "Waterford"
+  },
+  "Y35": {
+    "county": "Wexford"
+  },
+  "V31": {
+    "county": "Kerry"
+  },
+  "A91": {
+    "county": "Louth"
+  },
+  "R95": {
+    "county": "Kilkenny"
+  },
+  "V92": {
+    "county": "Kerry"
+  },
+  "P25": {
+    "county": "Cork"
+  },
+  "W91": {
+    "county": "Kildare"
+  },
+  "R93": {
+    "county": "Carlow"
+  },
+  "D15": {
+    "county": "Dublin"
+  },
+  "F91": {
+    "county": "Sligo"
+  },
+  "D08": {
+    "county": "Dublin"
+  },
+  "E41": {
+    "county": "Tipperary"
+  },
+  "F42": {
+    "county": "Roscommon"
+  },
+  "V95": {
+    "county": "Clare"
+  },
+  "V42": {
+    "county": "Limerick"
+  },
+  "K36": {
+    "county": "Dublin"
+  },
+  "T12": {
+    "county": "Cork"
+  },
+  "H54": {
+    "county": "Galway"
+  },
+  "R32": {
+    "county": "Laois"
+  },
+  "X91": {
+    "county": "Waterford"
+  },
+  "P17": {
+    "county": "Cork"
+  },
+  "N37": {
+    "county": "Westmeath"
+  },
+  "P75": {
+    "county": "Cork"
+  },
+  "V35": {
+    "county": "Limerick"
+  },
+  "A67": {
+    "county": "Wicklow"
+  },
+  "F92": {
+    "county": "Donegal"
+  },
+  "F28": {
+    "county": "Mayo"
+  },
+  "F94": {
+    "county": "Donegal"
+  },
+  "F52": {
+    "county": "Roscommon"
+  },
+  "D10": {
+    "county": "Dublin"
+  },
+  "P61": {
+    "county": "Cork"
+  },
+  "D13": {
+    "county": "Dublin"
+  },
+  "F56": {
+    "county": "Sligo"
+  },
+  "V93": {
+    "county": "Kerry"
+  },
+  "H12": {
+    "county": "Cavan"
+  },
+  "A81": {
+    "county": "Monaghan"
+  },
+  "F45": {
+    "county": "Roscommon"
+  },
+  "D17": {
+    "county": "Dublin"
+  },
+  "A92": {
+    "county": "Louth"
+  },
+  "E91": {
+    "county": "Tipperary"
+  },
+  "A82": {
+    "county": "Cavan"
+  },
+  "D20": {
+    "county": "Dublin"
+  },
+  "A96": {
+    "county": "Dublin"
+  },
+  "D18": {
+    "county": "Dublin"
+  },
+  "P24": {
+    "county": "Cork"
+  },
+  "D01": {
+    "county": "Dublin"
+  },
+  "P51": {
+    "county": "Cork"
+  },
+  "E53": {
+    "county": "Tipperary"
+  },
+  "P72": {
+    "county": "Cork"
+  },
+  "D16": {
+    "county": "Dublin"
+  },
+  "A94": {
+    "county": "Dublin"
+  },
+  "N91": {
+    "county": "Westmeath"
+  },
+  "K78": {
+    "county": "Dublin"
+  },
+  "D04": {
+    "county": "Dublin"
+  },
+  "A63": {
+    "county": "Wicklow"
+  },
+  "D05": {
+    "county": "Dublin"
+  },
+  "F26": {
+    "county": "Mayo"
+  },
+  "E25": {
+    "county": "Tipperary"
+  },
+  "D02": {
+    "county": "Dublin"
+  },
+  "P36": {
+    "county": "Cork"
+  },
+  "E32": {
+    "county": "Tipperary"
+  },
+  "H18": {
+    "county": "Monaghan"
+  },
+  "K32": {
+    "county": "Dublin"
+  },
+  "R42": {
+    "county": "Offaly"
+  },
+  "D12": {
+    "county": "Dublin"
+  },
+  "Y25": {
+    "county": "Wexford"
+  },
+  "D03": {
+    "county": "Dublin"
+  },
+  "D6W": {
+    "county": "Dublin"
+  },
+  "K45": {
+    "county": "Dublin"
+  },
+  "A85": {
+    "county": "Meath"
+  },
+  "R14": {
+    "county": "Kildare"
+  },
+  "P81": {
+    "county": "Cork"
+  },
+  "P47": {
+    "county": "Cork"
+  },
+  "D14": {
+    "county": "Dublin"
+  },
+  "R51": {
+    "county": "Kildare"
+  },
+  "H16": {
+    "county": "Cavan"
+  },
+  "T56": {
+    "county": "Cork"
+  },
+  "D09": {
+    "county": "Dublin"
+  },
+  "E21": {
+    "county": "Tipperary"
+  },
+  "F12": {
+    "county": "Mayo"
+  },
+  "E34": {
+    "county": "Tipperary"
+  },
+  "H71": {
+    "county": "Galway"
+  },
+  "Y34": {
+    "county": "Wexford"
+  },
+  "K56": {
+    "county": "Dublin"
+  },
+  "P14": {
+    "county": "Cork"
+  },
+  "Y14": {
+    "county": "Wicklow"
+  },
+  "Y21": {
+    "county": "Wexford"
+  },
+  "A86": {
+    "county": "Meath"
+  },
+  "T45": {
+    "county": "Cork"
+  },
+  "X42": {
+    "county": "Waterford"
+  },
+  "H65": {
+    "county": "Galway"
+  },
+  "P85": {
+    "county": "Cork"
+  },
+  "F23": {
+    "county": "Mayo"
+  },
+  "K34": {
+    "county": "Dublin"
+  },
+  "A42": {
+    "county": "Dublin"
+  },
+  "H53": {
+    "county": "Galway"
+  },
+  "F31": {
+    "county": "Mayo"
+  },
+  "R21": {
+    "county": "Carlow"
+  },
+  "F35": {
+    "county": "Mayo"
+  },
+  "V14": {
+    "county": "Clare"
+  },
+  "H62": {
+    "county": "Galway"
+  },
+  "H23": {
+    "county": "Monaghan"
+  },
+  "P67": {
+    "county": "Cork"
+  },
+  "R45": {
+    "county": "Offaly"
+  },
+  "T34": {
+    "county": "Cork"
+  },
+  "W34": {
+    "county": "Kildare"
+  },
+  "R56": {
+    "county": "Kildare"
+  },
+  "P32": {
+    "county": "Cork"
+  },
+  "C04": {
+    "county": "Dublin"
+  },
+  "A41": {
+    "county": "Dublin"
+  },
+  "P23": {
+    "county": "Cork"
+  },
+  "A45": {
+    "county": "Dublin"
+  },
+  "T25": {
+    "county": "Cork"
+  },
+  "X34": {
+    "county": "Waterford"
+  },
+  "Y36": {
+    "county": "Wexford"
+  },
+  "C95": {
+    "county": "Clare"
+  },
+  "D94": {
+    "county": "Donegal"
+  },
+  "C93": {
+    "county": "Kerry"
+  },
+  "K91": {
+    "county": "Galway"
+  },
+  "E42": {
+    "county": "Tipperary"
+  },
+  "E23": {
+    "county": "Cork"
+  },
+  "F54": {
+    "county": "Roscommon"
+  },
+  "E24": {
+    "county": "Tipperary"
+  },
+  "Y95": {
+    "county": "Clare"
+  },
+  "E15": {
+    "county": "Meath"
+  },
+  "A99": {
+    "county": "Dublin"
+  },
+  "P68": {
+    "county": "Cork"
+  },
+  "F22": {
+    "county": "Galway"
+  },
+  "A68": {
+    "county": "Wicklow"
+  },
+  "N97": {
+    "county": "Westmeath"
+  },
+  "X95": {
+    "county": "Waterford"
+  },
+  "F98": {
+    "county": "Donegal"
+  },
+  "W31": {
+    "county": "Kerry"
+  },
+  "X93": {
+    "county": "Kerry"
+  },
+  "Y43": {
+    "county": "Wexford"
+  },
+  "N45": {
+    "county": "Offaly"
+  },
+  "F62": {
+    "county": "Roscommon"
+  },
+  "Y33": {
+    "county": "Wexford"
+  },
+  "A00": {
+    "county": "Galway"
+  },
+  "Y93": {
+    "county": "Kerry"
+  },
+  "T43": {
+    "county": "Cork"
+  },
+  "A51": {
+    "county": "Cork"
+  },
+  "V63": {
+    "county": "Kerry"
+  },
+  "E31": {
+    "county": "Tipperary"
+  },
+  "E28": {
+    "county": "Mayo"
+  },
+  "N93": {
+    "county": "Longford"
+  },
+  "H55": {
+    "county": "Galway"
+  },
+  "R41": {
+    "county": "Laois"
+  },
+  "N96": {
+    "county": "Dublin"
+  },
+  "R96": {
+    "county": "Kilkenny"
+  },
+  "R43": {
+    "county": "Cork"
+  },
+  "V36": {
+    "county": "Limerick"
+  },
+  "V04": {
+    "county": "Limerick"
+  },
+  "T05": {
+    "county": "Dublin"
+  },
+  "T47": {
+    "county": "Sligo"
+  },
+  "P62": {
+    "county": "Cork"
+  },
+  "N12": {
+    "county": "Dublin"
+  },
+  "W92": {
+    "county": "Kerry"
+  },
+  "V12": {
+    "county": "Cork"
+  },
+  "P58": {
+    "county": "Cork"
+  },
+  "D27": {
+    "county": "Dublin"
+  },
+  "F20": {
+    "county": "Mayo"
+  },
+  "N11": {
+    "county": "Westmeath"
+  },
+  "W53": {
+    "county": "Tipperary"
+  },
+  "P91": {
+    "county": "Leitrim"
+  },
+  "H72": {
+    "county": "Galway"
+  },
+  "P00": {
+    "county": "Cork"
+  },
+  "H17": {
+    "county": "Monaghan"
+  },
+  "P54": {
+    "county": "Waterford"
+  },
+  "R98": {
+    "county": "Wicklow"
+  },
+  "N31": {
+    "county": "Kerry"
+  },
+  "D95": {
+    "county": "Clare"
+  },
+  "Y26": {
+    "county": "Wexford"
+  },
+  "H15": {
+    "county": "Cavan"
+  },
+  "T67": {
+    "county": "Wicklow"
+  },
+  "W19": {
+    "county": "Kildare"
+  },
+  "H63": {
+    "county": "Galway"
+  },
+  "A36": {
+    "county": "Wicklow"
+  },
+  "Y92": {
+    "county": "Kerry"
+  },
+  "Y24": {
+    "county": "Dublin"
+  },
+  "F25": {
+    "county": "Mayo"
+  },
+  "F81": {
+    "county": "Cork"
+  },
+  "A93": {
+    "county": "Wexford"
+  },
+  "C14": {
+    "county": "Meath"
+  },
+  "H81": {
+    "county": "Galway"
+  },
+  "K65": {
+    "county": "Dublin"
+  },
+  "P15": {
+    "county": "Cork"
+  },
+  "V32": {
+    "county": "Dublin"
+  },
+  "R72": {
+    "county": "Cork"
+  },
+  "D56": {
+    "county": "Kildare"
+  },
+  "F95": {
+    "county": "Clare"
+  },
+  "D93": {
+    "county": "Donegal"
+  },
+  "N26": {
+    "county": "Sligo"
+  },
+  "P86": {
+    "county": "Cork"
+  },
+  "Y15": {
+    "county": "Clare"
+  },
+  "X82": {
+    "county": "Meath"
+  },
+  "N44": {
+    "county": "Leitrim"
+  }
+}
