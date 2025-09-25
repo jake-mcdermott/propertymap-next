@@ -79,6 +79,12 @@ function deriveSources(listing: Listing): SourceItem[] {
   return src.map((s) => ({ name: s.name?.trim(), url: s.url }));
 }
 
+function bedsLabelFrom(beds?: number | null) {
+  if (beds == null) return "—";        // null/undefined → dash
+  if (beds === 0) return "0";          // zero → "0"
+  return String(beds);                  // 1,2,3…
+}
+
 /* -------- Source pill with logo -------- */
 function SourcePill({ item }: { item: SourceItem }) {
   let host = "";
@@ -229,10 +235,13 @@ export function ListingCard({
             </div>
 
             <div className="mt-3 flex items-center gap-3 text-[12px] text-slate-300/90">
-              <span className="inline-flex items-center gap-1">
-                <BedDouble className="h-3.5 w-3.5 opacity-70" />
-                {listing.beds != null ? (listing.beds === 0 ? "Studio" : bedsLabel) : "—"}
-              </span>
+            <span className="inline-flex items-center gap-1">
+              <BedDouble className="h-3.5 w-3.5 opacity-70" />
+              {(() => {
+                const lbl = bedsLabelFrom(listing.beds);
+                return lbl === "—" ? "—" : `${lbl} Bed${lbl === "1" ? "" : "s"}`;
+              })()}
+            </span>
 
               <span className="inline-flex items-center gap-1">
                 <KindIcon kind={listing.kind} />
@@ -317,10 +326,13 @@ export function ListingCard({
         </div>
 
         <div className="mt-3 flex items-center gap-3 text-[12px] text-slate-300/90">
-          <span className="inline-flex items-center gap-1">
-            <BedDouble className="h-3.5 w-3.5 opacity-70" />
-            {bedsLabel}
-          </span>
+        <span className="inline-flex items-center gap-1">
+          <BedDouble className="h-3.5 w-3.5 opacity-70" />
+          {(() => {
+            const lbl = bedsLabelFrom(listing.beds);
+            return lbl === "—" ? "—" : `${lbl} Bed${lbl === "1" ? "" : "s"}`;
+          })()}
+        </span>
 
           <span className="inline-flex items-center gap-1">
             <KindIcon kind={listing.kind} />

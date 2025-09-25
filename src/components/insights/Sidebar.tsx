@@ -1,3 +1,4 @@
+// components/insights/Sidebar.tsx
 "use client";
 
 import React, { useMemo, useState } from "react";
@@ -15,6 +16,10 @@ type Props = {
   setIsOpen?: React.Dispatch<React.SetStateAction<boolean>>;
   isLoading?: boolean;
   error?: string;
+
+  // trimming control
+  trimEnabled?: boolean;
+  setTrimEnabled?: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
 export default function InsightsSidebar({
@@ -27,6 +32,8 @@ export default function InsightsSidebar({
   setIsOpen,
   isLoading,
   error,
+  trimEnabled = false,
+  setTrimEnabled,
 }: Props) {
   const [countyQuery, setCountyQuery] = useState("");
   const [copied, setCopied] = useState(false);
@@ -61,7 +68,6 @@ export default function InsightsSidebar({
       <div className="px-4 py-3 border-b border-neutral-800">
         <div className="text-xs font-medium text-neutral-300 mb-2">Listing type</div>
         <div className="inline-flex rounded-lg overflow-hidden border border-neutral-700">
-          {/* Sale */}
           <button
             type="button"
             onClick={() => setType("sale")}
@@ -73,8 +79,6 @@ export default function InsightsSidebar({
           >
             Sale
           </button>
-
-          {/* Rent (disabled / coming soon) */}
           <button
             type="button"
             aria-disabled="true"
@@ -86,6 +90,19 @@ export default function InsightsSidebar({
             Rent <span className="ml-1 text-[10px] uppercase tracking-wide">(Coming soon)</span>
           </button>
         </div>
+      </div>
+
+      {/* Normalization / Trimming (inline checkbox + label) */}
+      <div className="px-4 py-3 border-b border-neutral-800">
+        <label className="w-full flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!trimEnabled}
+            onChange={() => setTrimEnabled && setTrimEnabled((v) => !v)}
+            className="h-4 w-4 rounded border-neutral-600 accent-[#01677c] focus:ring-neutral-500"
+          />
+          <span className="text-sm text-neutral-100">Trim top & bottom 5%</span>
+        </label>
       </div>
 
       {/* Counties accordion */}
@@ -200,7 +217,7 @@ export default function InsightsSidebar({
             ) : (
               <>
                 <Check className="h-4 w-4" />
-                Ready
+                Ready{trimEnabled ? " • Trim 5%" : ""}
               </>
             )}
           </div>

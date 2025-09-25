@@ -60,11 +60,14 @@ export default function Header() {
 
       {/* Desktop nav */}
       <nav className="ml-auto hidden md:flex items-center gap-1 sm:gap-2 md:gap-4 text-[14px] font-medium tracking-tight">
-        <NavLink href="/contact" minimal={minimal}>
-          Contact
+        <NavLink href="/" minimal={minimal}>
+          Map
         </NavLink>
         <NavLink href="/insights" minimal={minimal}>
           Insights
+        </NavLink>
+        <NavLink href="/contact" minimal={minimal}>
+          Contact
         </NavLink>
       </nav>
 
@@ -88,6 +91,7 @@ export default function Header() {
             </SheetHeader>
 
             <div className="mt-4 flex flex-col">
+              <MobileItem href="/">Map</MobileItem>
               <MobileItem href="/insights">Insights</MobileItem>
               <MobileItem href="/contact">Contact</MobileItem>
             </div>

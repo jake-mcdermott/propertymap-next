@@ -60,7 +60,7 @@ function WindowedList<T>({
   gap = 12,
   overscan = 6,
   className = "",
-  onMountTopScrollRef, // optional: parent can scroll to top when page changes
+  onMountTopScrollRef,
 }: {
   items: T[];
   renderItem: (item: T, index: number) => React.ReactNode;
@@ -77,7 +77,6 @@ function WindowedList<T>({
   const rowH = estimatedItemHeight + gap;
   const totalH = Math.max(items.length * rowH - gap, 0);
 
-  // expose an imperative "scroll to top" for page changes
   useEffect(() => {
     if (!onMountTopScrollRef) return;
     onMountTopScrollRef.current = () => {
@@ -89,7 +88,6 @@ function WindowedList<T>({
     };
   }, [onMountTopScrollRef]);
 
-  // measure viewport height
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
@@ -103,7 +101,6 @@ function WindowedList<T>({
     setScrollTop((e.currentTarget as HTMLDivElement).scrollTop);
   }, []);
 
-  // compute window
   const { start, end, padTop, padBottom } = useMemo(() => {
     if (viewportH <= 0) {
       return {
@@ -130,13 +127,10 @@ function WindowedList<T>({
       className={`flex-1 min-h-0 overflow-auto will-change-scroll ${className}`}
     >
       <div style={{ height: totalH }} className="relative">
-        {/* top spacer */}
         <div style={{ height: padTop }} />
-        {/* window */}
         <div className="px-3 pb-3 grid gap-3">
           {slice.map((item, i) => renderItem(item, start + i))}
         </div>
-        {/* bottom spacer */}
         <div style={{ height: padBottom }} />
       </div>
     </div>
@@ -202,6 +196,13 @@ function Pager({
   );
 }
 
+/* ---------- NEW: sort helpers ---------- */
+type SortMode = "relevance" | "priceAsc" | "priceDesc";
+function priceForSort(listing: Listing): number {
+  const p = (listing.price ?? 0) as number;
+  return p > 0 && Number.isFinite(p) ? p : Number.POSITIVE_INFINITY; // POA/0 → end
+}
+
 export default function Sidebar({
   visibleRows,
   loading,
@@ -211,6 +212,9 @@ export default function Sidebar({
   // pagination state
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(48);
+
+  // NEW: sort state
+  const [sort, setSort] = useState<SortMode>("relevance");
 
   // clamp page when list changes
   useEffect(() => {
@@ -222,19 +226,31 @@ export default function Sidebar({
   // scroll-to-top hook for virtualized list
   const scrollTopRef = useRef<(() => void) | null>(null);
 
-  // compute slice for current page
+  // NEW: sorted copy (never mutate props)
+  const sortedRows = useMemo(() => {
+    if (sort === "relevance") return visibleRows;
+    const arr = [...visibleRows];
+    if (sort === "priceAsc") {
+      arr.sort((a, b) => priceForSort(a) - priceForSort(b));
+    } else if (sort === "priceDesc") {
+      arr.sort((a, b) => priceForSort(b) - priceForSort(a));
+    }
+    return arr;
+  }, [visibleRows, sort]);
+
+  // compute slice for current page (from sorted list)
   const { pageSlice, totalPages } = useMemo(() => {
-    const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+    const totalPages = Math.max(1, Math.ceil(sortedRows.length / pageSize));
     const p = Math.min(Math.max(1, page), totalPages);
     const start = (p - 1) * pageSize;
-    const end = Math.min(start + pageSize, visibleRows.length);
-    return { pageSlice: visibleRows.slice(start, end), totalPages };
-  }, [visibleRows, page, pageSize]);
+    const end = Math.min(start + pageSize, sortedRows.length);
+    return { pageSlice: sortedRows.slice(start, end), totalPages };
+  }, [sortedRows, page, pageSize]);
 
-  // when page or pageSize changes → scroll to top of list
+  // when page, pageSize, or sort changes → scroll to top of list
   useEffect(() => {
     scrollTopRef.current?.();
-  }, [page, pageSize]);
+  }, [page, pageSize, sort]);
 
   const showSkeletons = loading && visibleRows.length === 0;
   const useWindowing = pageSlice.length > 60; // still window within the current page
@@ -249,6 +265,26 @@ export default function Sidebar({
       {/* Header */}
       <div className="h-11 flex items-center justify-between px-3 shrink-0">
         <div className="text-sm font-medium">Listings</div>
+
+        {/* NEW: sort control */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="sort" className="text-xs">Sort</label>
+          <select
+            id="sort"
+            value={sort}
+            onChange={(e) => {
+              const v = e.target.value as SortMode;
+              setSort(v);
+              setPage(1);
+            }}
+            className="cursor-pointer bg-white/[0.04] border border-white/10 rounded-md px-2 py-1 text-xs outline-none text-white"
+          >
+            <option value="relevance" className="text-black">Relevance</option>
+            <option value="priceAsc" className="text-black">Price: Low → High</option>
+            <option value="priceDesc" className="text-black">Price: High → Low</option>
+          </select>
+        </div>
+
         <div className="flex items-center gap-2 text-xs">
           {loading ? (
             <>
@@ -257,8 +293,8 @@ export default function Sidebar({
             </>
           ) : (
             <span className="tabular-nums">
-              {visibleRows.length.toLocaleString()} total
-              {visibleRows.length > 0 && (
+              {sortedRows.length.toLocaleString()} total
+              {sortedRows.length > 0 && (
                 <span>{" "}| Page {page}/{totalPages}</span>
               )}
             </span>
@@ -275,7 +311,7 @@ export default function Sidebar({
             <SkeletonCard />
           </div>
         </div>
-      ) : visibleRows.length === 0 ? (
+      ) : sortedRows.length === 0 ? (
         <div className="flex-1 min-h-0 overflow-auto">
           <div className="px-4 py-6 text-sm">
             No listings in view. Pan or zoom the map.
@@ -317,15 +353,15 @@ export default function Sidebar({
       )}
 
       {/* Pager */}
-      {visibleRows.length > 0 && (
+      {sortedRows.length > 0 && (
         <Pager
-          total={visibleRows.length}
+          total={sortedRows.length}
           page={page}
           pageSize={pageSize}
           onPage={(p) => setPage(p)}
           onPageSize={(s) => {
             setPageSize(s);
-            setPage(1); // reset to first page on size change
+            setPage(1);
           }}
         />
       )}

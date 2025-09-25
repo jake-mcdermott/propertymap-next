@@ -1,10 +1,13 @@
+// components/insights/MostExpensive.tsx
 "use client";
 
 import React from "react";
 
-const fmt = (n?: number | null) => (n == null ? "—" : "€" + Math.round(n).toLocaleString("en-IE"));
+const fmt = (n?: number | null) =>
+  n == null ? "—" : "€" + Math.round(n).toLocaleString("en-IE");
 
 export type ListingType = "sale" | "rent";
+
 type Row = {
   id?: string | null;
   title?: string | null;
@@ -33,68 +36,74 @@ function normUrl(u?: string | null) {
   }
 }
 
+function buildTop(rows: Row[], limit = 120): Row[] {
+  if (!rows?.length) return [];
+  const best = new Map<string, Row>();
+
+  for (const r of rows) {
+    if (!Number.isFinite(r.price) || (r.price as number) <= 0) continue;
+
+    const url = normUrl(r.url);
+    const titleNorm = (r.title || r.address || "")
+      .toLowerCase()
+      .replace(/\s+/g, " ")
+      .trim();
+    const key = r.id || url || `${r.rk ?? ""}|${r.price}|${titleNorm.slice(0, 80)}`;
+
+    const prev = best.get(key);
+    if (!prev) {
+      best.set(key, { ...r, url });
+      continue;
+    }
+    // keep the higher price; otherwise merge missing bits
+    if (r.price > prev.price) {
+      best.set(key, {
+        ...r,
+        url: url ?? prev.url,
+        image: r.image ?? prev.image,
+        title: r.title ?? prev.title,
+        address: r.address ?? prev.address,
+      });
+    } else {
+      if (!prev.url && url) prev.url = url;
+      if (!prev.image && r.image) prev.image = r.image;
+      if (!prev.title && r.title) prev.title = r.title;
+      if (!prev.address && r.address) prev.address = r.address;
+      best.set(key, prev);
+    }
+  }
+
+  return Array.from(best.values())
+    .sort((a, b) => (b.price || 0) - (a.price || 0))
+    .slice(0, limit);
+}
+
 export default function MostExpensive({
   counties,
   type,
+  liveRows,
+  limit = 120,
 }: {
   counties: string[];
   type: ListingType;
+  liveRows: Row[];      // <-- pass from InsightsClient
+  limit?: number;
 }) {
   const [rows, setRows] = React.useState<Row[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [err, setErr] = React.useState<string>("");
-
   const [mx, setMx] = React.useState(10); // “See more”: +10 each time
 
   React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      setErr("");
-      try {
-        const params = new URLSearchParams();
-        params.set("type", type);
-        params.set("limit", "120");
-        if (counties.length) params.set("counties", counties.join(","));
-        const res = await fetch(`/api/top-listings?${params.toString()}`, { next: { revalidate: 120 } });
-        if (!res.ok) throw new Error("Failed to load top listings");
-        const data = (await res.json()) as Row[];
-
-        // Defensive dedupe (in case of mixed cache):
-        const seen = new Map<string, Row>();
-        for (const r of data) {
-          const key = r.id || normUrl(r.url) || `${r.rk}|${r.price}|${(r.title || r.address || "").toLowerCase().slice(0, 80)}`;
-          const prev = seen.get(key);
-          if (!prev || (r.price ?? 0) > (prev.price ?? 0)) {
-            seen.set(key, r);
-          } else if (prev && (!prev.url && r.url || !prev.image && r.image || !prev.title && r.title)) {
-            seen.set(key, { ...prev, url: prev.url || r.url, image: prev.image || r.image, title: prev.title || r.title });
-          }
-        }
-        const deduped = Array.from(seen.values());
-
-        if (!cancelled) {
-          setRows(deduped);
-          setMx(10); // reset pagination on filter change
-        }
-      } catch (e: any) {
-        if (!cancelled) setErr(e?.message || "Error");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [type, counties.join(",")]);
+    setRows(buildTop(liveRows, limit));
+    setMx(10); // reset pagination on filter/type change
+  }, [liveRows, limit, type, counties.join(",")]);
 
   return (
     <section className="mt-6 md:mt-8 rounded-xl border border-neutral-800 bg-neutral-900">
       <div className="px-4 py-3 border-b border-neutral-800 flex items-center justify-between">
         <h2 className="text-sm font-semibold">Most Expensive Listings</h2>
-        {!loading && !err && (
-          <span className="text-xs text-neutral-400">
-            Showing {Math.min(mx, rows.length)} of {rows.length}
-          </span>
-        )}
+        <span className="text-xs text-neutral-400">
+          Showing {Math.min(mx, rows.length)} of {rows.length}
+        </span>
       </div>
 
       <div className="relative overflow-x-auto">
@@ -164,7 +173,7 @@ export default function MostExpensive({
             {!rows.length && (
               <tr>
                 <td colSpan={6} className="px-3 py-3 text-neutral-500">
-                  {loading ? "Loading…" : err || "No data"}
+                  No data
                 </td>
               </tr>
             )}

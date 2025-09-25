@@ -14,6 +14,7 @@ import { SlidersHorizontal, RotateCcw, Link as LinkIcon, Check } from "lucide-re
 import MobileListingDrawer from "@/components/ui/MobileListingDrawer";
 import BottomListSheet from "@/components/ui/BottomListSheet";
 
+// IMPORTANT: ensure PropertyMap mounts only on client
 const PropertyMap = dynamic(() => import("@/components/PropertyMap"), { ssr: false });
 
 type Props = {
@@ -21,14 +22,22 @@ type Props = {
   active: Listing | null;
   visibleRows: Listing[];
   loading: boolean;
-  mobileView: "map" | "list";                 // kept for parent compatibility (not shown in UI)
-  setMobileView: (v: "map" | "list") => void; // kept for parent compatibility
+
+  /** Parent-controlled view; kept for compatibility */
+  mobileView: "map" | "list";
+  setMobileView: (v: "map" | "list") => void;
+
   onSelect: (id: string) => void;
   onVisibleChange: (ids: string[]) => void;
   onMapLoaded?: () => void;
+
   mobileFiltersOpen?: boolean;
   setMobileFiltersOpen?: (open: boolean) => void;
+
   onCloseActive?: () => void;
+
+  /** NEW: bump this to force a fresh MapContainer mount (fixes hidden-mount sizing on mobile) */
+  mapMountKey?: number;
 };
 
 /* ---------- Small button ---------- */
@@ -72,6 +81,7 @@ export default function MobilePane({
   mobileFiltersOpen,
   setMobileFiltersOpen,
   onCloseActive,
+  mapMountKey = 0,
 }: Props) {
   const [filtersOpenUncontrolled, setFiltersOpenUncontrolled] = useState(false);
   const filtersOpen = mobileFiltersOpen ?? filtersOpenUncontrolled;
@@ -87,6 +97,7 @@ export default function MobilePane({
       setCopied(true);
       setTimeout(() => setCopied(false), 900);
     } catch {
+      // fallback
       window.prompt("Copy this URL:", url);
     }
   };
@@ -97,13 +108,15 @@ export default function MobilePane({
     replaceFilters(cleared, { resetViewportOnTypeChange: true });
   };
 
-  // Keep old behavior for cluster-pick: just ensure we're on "map" in parent state.
+  // Keep old behavior for cluster-pick: ensure we're on "map" and select the first item
   useEffect(() => {
     const onPick = (e: Event) => {
       const { ids } = (e as CustomEvent).detail as { ids: string[]; lat: number; lng: number };
       if (!ids?.length) return;
       onSelect(ids[0]);
       setMobileView("map");
+      // Nudge a resize in case the map view was hidden
+      requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     };
     window.addEventListener("map:cluster-pick", onPick as EventListener);
     return () => window.removeEventListener("map:cluster-pick", onPick as EventListener);
@@ -143,7 +156,15 @@ export default function MobilePane({
 
   const mapAreaRef = useRef<HTMLDivElement>(null);
 
+  // When the map area first mounts or becomes visible, nudge a resize for Leaflet sizing
+  useEffect(() => {
+    if (!mapAreaRef.current) return;
+    const id = requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   return (
+    // md:hidden: this whole pane is mobile-only
     <section className="md:hidden flex-1 min-h-0 flex flex-col">
       {/* Header */}
       <div className={`${SURFACE} ${HAIRLINE} shrink-0`}>
@@ -171,9 +192,12 @@ export default function MobilePane({
       </div>
 
       {/* Map area (sheet lives inside this container) */}
-      <div ref={mapAreaRef} className="flex-1 min-h-0 relative">
-        <div className={`${SURFACE_SOFT} absolute inset-0`}>
+      <div ref={mapAreaRef} className="flex-1 min-h-0 relative h-full">
+        {/* Map fills the container */}
+        <div className={`${SURFACE_SOFT} absolute inset-0 h-full w-full`}>
+          {/* Key is the crucial part: remount MapContainer when key changes */}
           <PropertyMap
+            key={mapMountKey}
             listings={listings}
             active={active}
             onSelect={onSelect}
@@ -183,7 +207,7 @@ export default function MobilePane({
           />
         </div>
 
-        {/* Bottom draggable list sheet */}
+        {/* Bottom draggable list sheet overlays the map */}
         <BottomListSheet
           containerRef={mapAreaRef as React.RefObject<HTMLDivElement>}
           rows={visibleRows}
@@ -203,6 +227,8 @@ export default function MobilePane({
         open={filtersOpen}
         onClose={() => {
           setFiltersOpen(false);
+          // After closing filters (which may have hidden/reflowed the map), nudge a resize
+          requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         }}
       />
 
@@ -212,6 +238,8 @@ export default function MobilePane({
         listing={active}
         onClose={() => {
           onCloseActive?.();
+          // Drawer closing can change available height; nudge resize
+          requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         }}
       />
     </section>

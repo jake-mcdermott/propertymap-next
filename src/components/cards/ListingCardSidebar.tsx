@@ -114,8 +114,8 @@ export default function ListingCardSidebar({
         {/* Meta */}
         <div className="mt-3 flex items-center gap-3 text-[12px] text-slate-300/90">
           <span className="inline-flex items-center gap-1">
-            <BedDouble className="h-3.5 w-3.5 opacity-70" />
-            {bedsLabel}
+            <BedDouble className="h-3.5 w-3.5 opacity-80" />
+            {listing.beds != null ? (listing.beds === 0 ? "Studio" : bedsLabel) : "—"}
           </span>
           <span className="inline-flex items-center gap-1">
             <KindIcon kind={listing.kind as any} />
