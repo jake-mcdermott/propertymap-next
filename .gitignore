@@ -44,4 +44,4 @@ next-env.d.ts
 # secrets
 secrets/*
 .env.local
-.env.production
+.env.productionsecrets/*
