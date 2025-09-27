@@ -247,42 +247,42 @@ export default function BottomListSheet({
               }
             }}
           >
-          <div className="flex flex-col pt-2">   {/* was items-center */}
-            <div className="h-1.5 w-12 rounded-full bg-white/80 self-center" />
+            <div className="flex flex-col pt-2">
+              <div className="h-1.5 w-12 rounded-full bg-white/80 self-center" />
 
-            <div className="mt-2 text-[13px] text-slate-200 self-center">
-              {rows.length ? `${rows.length} in view` : (loading ? "Loading…" : "No results")}
+              <div className="mt-2 text-[13px] text-slate-200 self-center">
+                {rows.length ? `${rows.length} in view` : (loading ? "Loading…" : "No results")}
+              </div>
+
+              {/* toolbar: full-width, left-aligned */}
+              <div className="mt-3 w-full px-3 flex items-center gap-3 text-xs justify-start">
+                <label className="flex items-center gap-1 text-slate-300">
+                  Sort
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value as SortMode)}
+                    className="ml-1 bg-white/[0.06] text-slate-100 ring-1 ring-white/10 rounded px-2 py-1"
+                  >
+                    <option value="relevance" className="bg-black">Relevance</option>
+                    <option value="priceAsc" className="bg-black">Price: Low → High</option>
+                    <option value="priceDesc" className="bg-black">Price: High → Low</option>
+                  </select>
+                </label>
+
+                <label className="flex items-center gap-1 text-slate-300">
+                  per page
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
+                    className="ml-1 bg-white/[0.06] text-slate-100 ring-1 ring-white/10 rounded px-2 py-1"
+                  >
+                    {[12, 24, 36, 48].map((n) => (
+                      <option key={n} value={n} className="bg-black">{n}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
             </div>
-
-            {/* toolbar: full-width, left-aligned */}
-            <div className="mt-3 w-full px-3 flex items-center gap-3 text-xs justify-start">
-              <label className="flex items-center gap-1 text-slate-300">
-                Sort
-                <select
-                  value={sort}
-                  onChange={(e) => setSort(e.target.value as SortMode)}
-                  className="ml-1 bg-white/[0.06] text-slate-100 ring-1 ring-white/10 rounded px-2 py-1"
-                >
-                  <option value="relevance" className="bg-black">Relevance</option>
-                  <option value="priceAsc" className="bg-black">Price: Low → High</option>
-                  <option value="priceDesc" className="bg-black">Price: High → Low</option>
-                </select>
-              </label>
-
-              <label className="flex items-center gap-1 text-slate-300">
-                per page
-                <select
-                  value={pageSize}
-                  onChange={(e) => setPageSize(parseInt(e.target.value, 10))}
-                  className="ml-1 bg-white/[0.06] text-slate-100 ring-1 ring-white/10 rounded px-2 py-1"
-                >
-                  {[12, 24, 36, 48].map((n) => (
-                    <option key={n} value={n} className="bg-black">{n}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          </div>
           </div>
 
           {/* Scroll area (between handle and footer) */}

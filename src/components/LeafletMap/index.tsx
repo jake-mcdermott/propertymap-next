@@ -567,13 +567,39 @@ export default function LeafletMap({
                       const map = mapRef.current as any;
                       const idxRef = indexRef.current;
                       if (!map || !idxRef) return;
-
+                    
+                      // Mobile + max zoom → if leaves coincide on screen, open list sheet
+                      const isMobileMaxZoom =
+                        isMobileScreen() && (map.getZoom?.() ?? 0) >= (map.getMaxZoom?.() ?? 21);
+                    
+                      if (isMobileMaxZoom) {
+                        const leaves = idxRef.getLeaves(cid, Infinity, 0) as Array<GeoJSON.Feature<GeoJSON.Point, PtProps>>;
+                    
+                        if (leaves.length >= 2) {
+                          const toPx = (lng: number, lat: number) => map.project([lat, lng], map.getZoom());
+                          const p0 = toPx(leaves[0].geometry.coordinates[0], leaves[0].geometry.coordinates[1]);
+                          const thresholdPx = 3;
+                          const allSamePoint = leaves.every((lf) => {
+                            const [lng2, lat2] = lf.geometry.coordinates;
+                            const p = toPx(lng2, lat2);
+                            return Math.hypot(p.x - p0.x, p.y - p0.y) <= thresholdPx;
+                          });
+                    
+                          if (allSamePoint) {
+                            const ids = leaves.map((lf) => lf.properties?.listingId).filter(Boolean) as string[];
+                            window.dispatchEvent(
+                              new CustomEvent("map:cluster-pick", {
+                                detail: { ids, lat: clat, lng: clng, openSheet: true },
+                              })
+                            );
+                            return; // stop default zoom
+                          }
+                        }
+                      }
+                    
+                      // Default expand/zoom
                       const base = idxRef.getClusterExpansionZoom(cid);
-                      const desired = Math.min(
-                        Math.max(base + 1, map.getZoom() + 1),
-                        map.getMaxZoom()
-                      );
-
+                      const desired = Math.min(Math.max(base + 1, map.getZoom() + 1), map.getMaxZoom());
                       map.flyTo([clat, clng], desired, {
                         animate: true,
                         duration: 0.55,
