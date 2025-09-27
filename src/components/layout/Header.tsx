@@ -66,9 +66,6 @@ export default function Header() {
         <NavLink href="/insights" minimal={minimal}>
           Insights
         </NavLink>
-        <NavLink href="/mortgage-calc" minimal={minimal}>
-          Mortgage Calc
-        </NavLink>
         <NavLink href="/contact" minimal={minimal}>
           Contact
         </NavLink>
@@ -96,7 +93,6 @@ export default function Header() {
             <div className="mt-4 flex flex-col">
               <MobileItem href="/">Map</MobileItem>
               <MobileItem href="/insights">Insights</MobileItem>
-              <MobileItem href="/mortgage-calc">Mortgage Calc</MobileItem>
               <MobileItem href="/contact">Contact</MobileItem>
             </div>
           </SheetContent>
