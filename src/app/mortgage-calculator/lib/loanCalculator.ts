@@ -33,7 +33,6 @@ export function createChartData(form: LoanFormData): ChartData {
 
   let totalYears = 0;
   if (form.loanType === "fixed") totalYears = fixedYears;
-  else if (form.loanType === "variable") totalYears = variableYears;
   else totalYears = fixedYears + variableYears; // both
 
   const totalMonths = Math.max(0, Math.round(totalYears * 12));
@@ -44,10 +43,7 @@ export function createChartData(form: LoanFormData): ChartData {
   const fixedMonths = fixedYears * 12;
 
   // initial monthly repayment: use the rate applicable in the first month
-  const firstMonthlyRate =
-    form.loanType === "variable"
-      ? variableRate / 12 / 100
-      : fixedRate / 12 / 100; // fixed OR start of 'both' uses fixed rate
+  const firstMonthlyRate = fixedRate / 12 / 100; // fixed OR start of 'both' uses fixed rate
 
   let monthlyRepayment = calcMonthlyPayment(
     form.loanAmount,
@@ -88,14 +84,14 @@ export function createChartData(form: LoanFormData): ChartData {
 
     // pick applicable monthly rate (handle 'both' switching)
     const currentMonthlyRate =
-      form.loanType === "both" && i > fixedMonths
+      form.loanType === "fixed" && i > fixedMonths
         ? variableRate / 12 / 100
-        : form.loanType === "variable"
+        : form.loanType === "fixed and variable"
         ? variableRate / 12 / 100
         : fixedRate / 12 / 100;
 
     // if we've just moved into variable stage (for 'both'), recompute scheduled payment
-    if (form.loanType === "both" && i === fixedMonths + 1) {
+    if (form.loanType === "fixed and variable" && i === fixedMonths + 1) {
       const monthsLeft = totalMonths - (i - 1);
       if (monthsLeft > 0) {
         monthlyRepayment = calcMonthlyPayment(remainingBalance, currentMonthlyRate, monthsLeft);
@@ -176,6 +172,7 @@ export function createChartData(form: LoanFormData): ChartData {
 
   const totalRepayment = round2(cumulativePayments);
   const totalInterest = round2(cumulativeInterest);
+  const loanAmount = form.loanAmount
 
   return {
     principalSeries,
@@ -183,6 +180,7 @@ export function createChartData(form: LoanFormData): ChartData {
     totalPaymentSeries,
     yearlyAmortization,
     monthlyAmortization,
+    loanAmount,
     totalRepayment,
     totalInterest,
     yearlyCumulative,

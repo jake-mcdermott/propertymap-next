@@ -27,7 +27,7 @@ export default function LoanGraphs({ data }: LoanGraphsProps) {
   if (!data) return null; // don’t render until form submitted
 
   const pieData = [
-    { name: "Principal", value: data.totalRepayment - data.totalInterest },
+    { name: "Principal", value: data.loanAmount },
     { name: "Interest", value: data.totalInterest },
   ];
 
@@ -46,7 +46,7 @@ export default function LoanGraphs({ data }: LoanGraphsProps) {
               {new Intl.NumberFormat("en-IE", {
                 style: "currency",
                 currency: "EUR",
-              }).format(data.totalRepayment - data.totalInterest)}
+              }).format(data.loanAmount)}
             </span>
 
             <span>Total Interest</span>

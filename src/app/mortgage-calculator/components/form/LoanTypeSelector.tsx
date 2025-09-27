@@ -10,7 +10,7 @@ export default function LoanTypeSelector({ form, setForm }: Props) {
     <div className="flex items-center gap-4 py-2">
       <label className="w-1/4 font-medium">Loan Type</label>
       <div className="flex-1 flex flex-row space-x-6">
-        {["fixed", "variable", "both"].map((type) => (
+        {["fixed", "fixed and variable"].map((type) => (
           <label key={type} className="flex items-center gap-2 cursor-pointer">
             <input
               type="radio"

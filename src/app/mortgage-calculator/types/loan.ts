@@ -1,6 +1,6 @@
 export interface LoanFormData {
   loanAmount: number | null;
-  loanType: "fixed" | "variable" | "both";
+  loanType: "fixed" | "fixed and variable";
   fixed: {
     period: number | "";
     interest: number | "";
@@ -48,6 +48,7 @@ export interface ChartData {
     totalPaymentSeries: { x: number; y: number }[];
     yearlyAmortization: YearlyData[];
     monthlyAmortization: MonthlyData[];
+    loanAmount: number;
     totalRepayment: number;
     totalInterest: number;
     yearlyCumulative: YearlyCumulativeData[];

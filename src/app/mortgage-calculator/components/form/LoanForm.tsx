@@ -1,9 +1,9 @@
 import { LoanFormData } from "../../types/loan";
-import LoanAmountInput from "../../components/form/LoanAmountInput";
-import LoanTypeSelector from "../../components/form/LoanTypeSelector";
-import LoanPeriodInput from "../../components/form/LoanPeriodInput";
-import OverpaymentsInput from "../../components/form/OverpaymentsInput";
-import LoanStartDate from "../../components/form/LoanStartDate"
+import LoanAmountInput from "./LoanAmountInput";
+import LoanTypeSelector from "./LoanTypeSelector";
+import LoanPeriodInput from "./LoanPeriodInput";
+import OverpaymentsInput from "./OverpaymentsInput";
+import LoanStartDate from "./LoanStartDate"
 
 
 interface Props {
@@ -23,10 +23,7 @@ export default function LoanForm({ form, setForm }: Props) {
             {form.loanType === "fixed" && (
                 <LoanPeriodInput type="fixed" label="Loan Period" form={form} setForm={setForm} />
             )}
-            {form.loanType === "variable" && (
-                <LoanPeriodInput type="variable" label="Loan Period" form={form} setForm={setForm} />
-            )}
-            {form.loanType === "both" && (
+            {form.loanType === "fixed and variable" && (
                 <>
                     <LoanPeriodInput type="fixed" label="Period (Fixed)" form={form} setForm={setForm} />
                     <LoanPeriodInput type="variable" label="Period (Variable)" form={form} setForm={setForm} />

@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { LoanFormData, ChartData } from "../types/loan";
 import { createChartData } from "../lib/loanCalculator";
-import LoanForm from "../components/form/LoanForm";
-import LoanGraphs from "../components/graph/LoanGraphs";
+import LoanForm from "./form/LoanForm";
+import LoanGraphs from "./graph/LoanGraphs";
 
 export default function MortgageCalcWrapper() {
     const [form, setForm] = useState<LoanFormData>({
