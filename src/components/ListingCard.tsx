@@ -4,7 +4,7 @@
 import React, { useState } from "react";
 import type { Listing } from "@/lib/types";
 import { clsx } from "clsx";
-import { ExternalLink, MapPin, BedDouble, Home, Building2 } from "lucide-react";
+import { MapPin, BedDouble, Home, Building2 } from "lucide-react";
 
 /* -------- helpers -------- */
 function kindLabel(kind?: Listing["kind"], title?: string, propertyType?: string) {
@@ -22,25 +22,30 @@ function cleanCounty(s?: string) {
   if (!s) return "";
   return s.replace(/^\s*(?:co\.?|county)\s+/i, "").trim();
 }
-function splitAddress(address?: string, fallbackCounty?: string) {
-  const parts = (address || "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map(cleanCounty);
-  const cleanedCounty = cleanCounty(fallbackCounty);
-  if (parts.length === 0) return { primary: cleanedCounty || "—", secondary: "" };
-  const primary = parts.slice(0, 2).join(", ");
-  let secondary = parts.slice(2).join(", ");
-  if (!secondary && cleanedCounty) {
-    const pLow = primary.toLowerCase();
-    if (!pLow.includes(cleanedCounty.toLowerCase())) secondary = cleanedCounty;
-  }
-  return { primary, secondary };
-}
 function displayPrice(price?: number | null) {
   if (!price || price <= 0) return "POA";
   return `€${price.toLocaleString()}`;
+}
+
+/* Address lines (requested layout) */
+function primaryAddress(listing: Listing) {
+  const a = (listing.address || "").trim();
+  if (a) return a;
+  const county = cleanCounty(listing.county);
+  const eir = (listing as any).eircode || "";
+  return [county, eir].filter(Boolean).join(" · ") || "—";
+}
+function countyEirLine(listing: Listing) {
+  const county = cleanCounty(listing.county);
+  const eir = (listing as any).eircode || "";
+  const txt = [county || null, eir || null].filter(Boolean).join(" · ");
+  return txt || "";
+}
+
+function bedsLabelFrom(beds?: number | null) {
+  if (beds == null) return "—";
+  if (beds === 0) return "0";
+  return String(beds);
 }
 
 /* -------- source branding helpers -------- */
@@ -48,9 +53,9 @@ type SourceItem = { name?: string; url: string };
 
 function brandFromHost(host: string): string {
   const h = host.replace(/^www\./, "").toLowerCase();
-  if (h.includes("daft")) return "daft";
   if (h.includes("myhome")) return "myhome";
   if (h.includes("sherryfitz")) return "sherryfitz";
+  if (h.includes("dng")) return "dng";
   if (h.includes("propertypal")) return "propertypal";
   if (h.includes("rightmove")) return "rightmove";
   if (h.includes("zoopla")) return "zoopla";
@@ -59,9 +64,9 @@ function brandFromHost(host: string): string {
 }
 function prettyName(brand: string): string {
   switch (brand) {
-    case "daft": return "Daft";
     case "myhome": return "MyHome";
     case "sherryfitz": return "SherryFitz";
+    case "dng": return "DNG";
     case "propertypal": return "PropertyPal";
     case "rightmove": return "Rightmove";
     case "zoopla": return "Zoopla";
@@ -69,20 +74,44 @@ function prettyName(brand: string): string {
     default: return "Source";
   }
 }
+
+/** Compute the label we actually render for a source — used for sorting. */
+function sourceLabel(item: SourceItem): string {
+  let host = "";
+  try { host = new URL(item.url).host; } catch {}
+  const brand = brandFromHost(host);
+  const fallbackHost = host.replace(/^www\./, "") || "Source";
+  return (item.name?.trim()) || prettyName(brand) || fallbackHost;
+}
+
+/** Build, de-duplicate, and **alphabetically sort** sources by their render label. */
 function deriveSources(listing: Listing): SourceItem[] {
   const primary = listing.url as string | undefined;
   const extra = listing.sources as Array<{ name?: string; url: string }> | undefined;
 
   const fallback: SourceItem[] = primary ? [{ name: undefined, url: primary }] : [];
-  const src = (extra && extra.length ? extra : fallback).slice(0, 8);
+  const raw = (extra && extra.length ? extra : fallback) as SourceItem[];
 
-  return src.map((s) => ({ name: s.name?.trim(), url: s.url }));
-}
+  // De-dupe by URL (stable)
+  const byUrl = new Map<string, SourceItem>();
+  for (const s of raw) {
+    if (!s?.url) continue;
+    if (!byUrl.has(s.url)) byUrl.set(s.url, { name: s.name?.trim(), url: s.url });
+  }
 
-function bedsLabelFrom(beds?: number | null) {
-  if (beds == null) return "—";        // null/undefined → dash
-  if (beds === 0) return "0";          // zero → "0"
-  return String(beds);                  // 1,2,3…
+  const deduped = Array.from(byUrl.values());
+
+  // Sort by label (case-insensitive), then by URL to make ties stable
+  deduped.sort((a, b) => {
+    const la = sourceLabel(a).toLowerCase();
+    const lb = sourceLabel(b).toLowerCase();
+    if (la < lb) return -1;
+    if (la > lb) return 1;
+    // tie-breaker (stable)
+    return (a.url || "").localeCompare(b.url || "");
+  });
+
+  return deduped.slice(0, 8);
 }
 
 /* -------- Source pill with logo -------- */
@@ -90,9 +119,9 @@ function SourcePill({ item }: { item: SourceItem }) {
   let host = "";
   try { host = new URL(item.url).host; } catch {}
   const brand = brandFromHost(host);
-  const label = item.name || prettyName(brand) || host.replace(/^www\./, "") || "Source";
+  const label = sourceLabel(item);
   const logoFor = (b: string) =>
-    ["daft","myhome","findqo","sherryfitz","propertypal","rightmove","zoopla"].includes(b)
+    ["myhome","findqo","sherryfitz","dng","propertypal","rightmove","zoopla"].includes(b)
       ? `/logos/${b}.png`
       : `/logos/generic.png`;
 
@@ -143,20 +172,15 @@ export function ListingCard({
   onClick?: () => void;
   variant?: Variant;
 }) {
-  const bedsLabel =
-    listing.beds === 0 ? "Studio" : `${listing.beds} Bed${listing.beds === 1 ? "" : "s"}`;
-
   const propertyType =
     typeof (listing as Record<string, unknown>).propertyType === "string"
       ? ((listing as Record<string, unknown>).propertyType as string)
       : undefined;
 
   const kind = kindLabel(listing.kind, listing.title, propertyType);
-  const { primary, secondary } = splitAddress(listing.address, listing.county);
 
-  const fullAddress = [listing.address?.trim() || primary, secondary || null]
-    .filter(Boolean)
-    .join(", ");
+  const addrPrimary = primaryAddress(listing);
+  const countyEir = countyEirLine(listing);
 
   const handleClick = () => {
     onClick?.();
@@ -197,7 +221,7 @@ export function ListingCard({
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={listing.images[0]}
-                alt={primary}
+                alt={addrPrimary}
                 className="absolute inset-0 h-full w-full object-cover"
               />
             ) : (
@@ -216,32 +240,34 @@ export function ListingCard({
           {/* Content (right) */}
           <div className="min-w-0 py-3 pr-3 flex flex-col justify-between">
             <div>
+              {/* Address (first line) */}
               <h3
                 className="font-semibold leading-snug text-sm text-white truncate"
-                title={listing.title || primary}
+                title={addrPrimary}
               >
-                {listing.title || primary}
+                {addrPrimary}
               </h3>
 
-              {!!fullAddress && (
+              {/* County · Eircode (second line) */}
+              {!!countyEir && (
                 <div
                   className="mt-1 flex items-center gap-1.5 text-xs text-slate-300/90 truncate"
-                  title={fullAddress}
+                  title={countyEir}
                 >
                   <MapPin className="h-3 w-3 shrink-0 opacity-70" />
-                  {fullAddress}
+                  {countyEir}
                 </div>
               )}
             </div>
 
             <div className="mt-3 flex items-center gap-3 text-[12px] text-slate-300/90">
-            <span className="inline-flex items-center gap-1">
-              <BedDouble className="h-3.5 w-3.5 opacity-70" />
-              {(() => {
-                const lbl = bedsLabelFrom(listing.beds);
-                return lbl === "—" ? "—" : `${lbl} Bed${lbl === "1" ? "" : "s"}`;
-              })()}
-            </span>
+              <span className="inline-flex items-center gap-1">
+                <BedDouble className="h-3.5 w-3.5 opacity-70" />
+                {(() => {
+                  const lbl = bedsLabelFrom(listing.beds);
+                  return lbl === "—" ? "—" : `${lbl} Bed${lbl === "1" ? "" : "s"}`;
+                })()}
+              </span>
 
               <span className="inline-flex items-center gap-1">
                 <KindIcon kind={listing.kind} />
@@ -249,7 +275,7 @@ export function ListingCard({
               </span>
             </div>
 
-            {/* Sources with logos */}
+            {/* Sources with logos (sorted) */}
             {srcs.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {srcs.slice(0, 6).map((s, i) => (
@@ -292,7 +318,7 @@ export function ListingCard({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={listing.images[0]}
-            alt={primary}
+            alt={addrPrimary}
             className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
             loading="lazy"
           />
@@ -312,27 +338,28 @@ export function ListingCard({
       {/* Content */}
       <div className="min-w-0 py-3 pr-3 flex flex-col justify-between">
         <div>
+          {/* Address (first line) */}
           <h3 className="font-semibold leading-snug text-sm text-white line-clamp-1 group-hover:text-violet-200 transition">
-            {primary}
+            {addrPrimary}
           </h3>
 
-          {/* Secondary line (area/county) */}
-          {secondary && (
+          {/* County · Eircode (second line) */}
+          {countyEir && (
             <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-400 line-clamp-1">
               <MapPin className="h-3 w-3 shrink-0 opacity-70" />
-              {secondary}
+              {countyEir}
             </div>
           )}
         </div>
 
         <div className="mt-3 flex items-center gap-3 text-[12px] text-slate-300/90">
-        <span className="inline-flex items-center gap-1">
-          <BedDouble className="h-3.5 w-3.5 opacity-70" />
-          {(() => {
-            const lbl = bedsLabelFrom(listing.beds);
-            return lbl === "—" ? "—" : `${lbl} Bed${lbl === "1" ? "" : "s"}`;
-          })()}
-        </span>
+          <span className="inline-flex items-center gap-1">
+            <BedDouble className="h-3.5 w-3.5 opacity-70" />
+            {(() => {
+              const lbl = bedsLabelFrom(listing.beds);
+              return lbl === "—" ? "—" : `${lbl} Bed${lbl === "1" ? "" : "s"}`;
+            })()}
+          </span>
 
           <span className="inline-flex items-center gap-1">
             <KindIcon kind={listing.kind} />
@@ -340,7 +367,7 @@ export function ListingCard({
           </span>
         </div>
 
-        {/* Sources with logos */}
+        {/* Sources with logos (sorted) */}
         {srcs.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
             {srcs.map((s, i) => (

@@ -69,32 +69,56 @@ function quantile(sorted: number[], q: number) {
 
 // Trim by price **percentiles** among the currently selected subset.
 // Keeps items within [q, 1-q]. Everything else is removed.
+// helpers
+const normCounty = (s?: string | null) =>
+  (s || "").replace(/^\s*(?:co\.?|county)\s+/i, "").trim();
+const rkOf = (eir?: string) =>
+  (typeof eir === "string" && eir.length >= 3) ? eir.slice(0, 3).toUpperCase() : null;
+
 function trimListingsByPrice(
   listings: RawListing[],
   counties: string[],
   type: ListingType,
   trimFraction: number
 ): RawListing[] {
-  const predicate = (l: RawListing) =>
-    (!type || l.type === type) && (!counties.length || (l.county && counties.includes(l.county)));
+  if (trimFraction <= 0) return listings;
 
-  // Build the price distribution of the selected scope
-  const selectedPrices = listings
-    .filter(predicate)
-    .map(l => l.price)
-    .filter(p => Number.isFinite(p) && (p as number) > 0); // ignore POA/0 here as well when computing thresholds
+  // Build selected scope predicate (lenient on type; strict on county)
+  const sel = new Set(counties.map(normCounty));
+  const inScope = (l: RawListing) => {
+    const typeOk =
+      !type || !l.type || l.type === type; // allow missing type to count
+    const countyOk =
+      !counties.length || (l.county && sel.has(normCounty(l.county)));
+    return typeOk && countyOk;
+  };
 
-  if (selectedPrices.length < 10 || trimFraction <= 0) return listings;
+  // Prices for scope (fallback to global if too small)
+  const scoped = listings.filter(
+    (l) => Number.isFinite(l.price) && (l.price as number) > 0 && inScope(l)
+  );
+  const base = (scoped.length >= 10 ? scoped : listings)
+    .map((l) => l.price as number)
+    .filter((p) => Number.isFinite(p) && p > 0)
+    .sort((a, b) => a - b);
 
-  selectedPrices.sort((a, b) => a - b);
-  const low = quantile(selectedPrices, trimFraction);
-  const high = quantile(selectedPrices, 1 - trimFraction);
+  if (base.length < 10) return listings;
 
-  // Keep only items in [low, high] for the selected subset; everything else untouched
-  return listings.filter(l => {
-    if (!predicate(l)) return true;
-    return l.price >= low && l.price <= high;
-  });
+  const q = (arr: number[], t: number) => {
+    const pos = (arr.length - 1) * t;
+    const lo = Math.floor(pos);
+    const hi = Math.min(lo + 1, arr.length - 1);
+    const frac = pos - lo;
+    return arr[lo] + frac * (arr[hi] - arr[lo]);
+  };
+
+  const low = q(base, trimFraction);
+  const high = q(base, 1 - trimFraction);
+
+  // Apply thresholds to all priced rows (prevents “out-of-scope” bypass)
+  return listings.filter(
+    (l) => Number.isFinite(l.price) && (l.price as number) > 0 && (l.price as number) >= low && (l.price as number) <= high
+  );
 }
 
 export default function InsightsClient() {
@@ -184,28 +208,54 @@ export default function InsightsClient() {
       setLiveLoading(true);
       setErr("");
       setLiveErr("");
-
+  
       try {
         const snap = await getDocs(collection(db, "map-listings"));
         if (cancelled) return;
-
+  
         const raw = collectListingsFromSnapshot(snap) as RawListing[];
-
-        // ⛳️ IMPORTANT: ignore POA/zero-price listings globally
-        const priced: RawListing[] = raw.filter(
+  
+        // ----- scope by county/type first (no price gate here) -----
+        const sel = new Set(selectedCounties.map(normCounty));
+        const inScope = (l: RawListing) => {
+          const typeOk = !type || !l.type || l.type === type; // lenient on missing type
+          const countyOk = !selectedCounties.length || (l.county && sel.has(normCounty(l.county)));
+          return typeOk && countyOk;
+        };
+  
+        // (optional) recency is handled by build* helpers, so we don't recheck here.
+        const scopedAll = raw.filter(inScope);
+  
+        // Total counts by RK from *all* rows (incl. POA)
+        const countAllByRK = new Map<string, number>();
+        for (const l of scopedAll) {
+          const rk = rkOf((l as any).eircode);
+          if (!rk) continue;
+          countAllByRK.set(rk, (countAllByRK.get(rk) || 0) + 1);
+        }
+  
+        // ----- priced stream for averages/live -----
+        const priced = scopedAll.filter(
           (l) => Number.isFinite(l.price) && (l.price as number) > 0
         );
-
-        // Apply 5% each-side trimming if enabled, based on the current selection scope
-        const working = trimEnabled
+  
+        // Apply trimming on the priced stream only
+        const pricedWorking = trimEnabled
           ? trimListingsByPrice(priced, selectedCounties, type, 0.05)
           : priced;
-
-        const [mapAgg, live] = await Promise.all([
-          buildMapAverages(working, selectedCounties, type, { maxAgeDays: 90 }),
-          buildLiveRows(working, selectedCounties, type, { maxAgeDays: 90 }),
+  
+        // Build from priced stream (helpers also apply maxAgeDays)
+        const [mapAggPriced, live] = await Promise.all([
+          buildMapAverages(pricedWorking, selectedCounties, type, { maxAgeDays: 90 }),
+          buildLiveRows(pricedWorking, selectedCounties, type, { maxAgeDays: 90 }),
         ]);
-
+  
+        // Override count with totals from scopedAll so Insights matches the map
+        const mapAgg = mapAggPriced.map((r) => {
+          const total = countAllByRK.get(r.rk) ?? r.count; // fallback to priced count
+          return { ...r, count: total, pricedCount: r.count } as AvgRow & { pricedCount?: number };
+        });
+  
         if (!cancelled) {
           setAvgRows(mapAgg);
           setLiveRows(live);
@@ -222,11 +272,10 @@ export default function InsightsClient() {
         }
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+  
+    return () => { cancelled = true; };
   }, [selectedCounties.join(","), type, trimEnabled]);
+  
 
   // NEW: fetch manifest (last updated, total, shards)
   React.useEffect(() => {
@@ -251,13 +300,35 @@ export default function InsightsClient() {
   const remaining = Math.max(0, Math.min(50, avgRows.length) - Math.min(MAX_ROWS, avgRows.length));
 
   // KPIs (computed from the already-filtered + trimmed avgRows)
+  // KPIs (use PRICED counts so trim actually reduces ~10%)
   const metrics = React.useMemo(() => {
-    if (!avgRows.length) return { totalListings: 0, weightedAvg: null as number | null, weightedMed: null as number | null, rkCount: 0 };
-    const totalListings = avgRows.reduce((a, r) => a + r.count, 0);
-    const weightedAvg = totalListings > 0 ? avgRows.reduce((a, r) => a + r.avg * r.count, 0) / totalListings : null;
-    const weightedMed = weightedMedian(avgRows);
+    if (!avgRows.length) {
+      return {
+        totalListings: 0,
+        weightedAvg: null as number | null,
+        weightedMed: null as number | null,
+        rkCount: 0,
+      };
+    }
+
+    // sum of priced rows (already trimmed if trimEnabled)
+    const pricedTotal = avgRows.reduce((a, r: any) => a + (r.pricedCount ?? r.count ?? 0), 0);
+
+    // weight averages by priced counts, not by all counts
+    const weightedAvg =
+      pricedTotal > 0
+        ? avgRows.reduce((a, r: any) => a + r.avg * (r.pricedCount ?? r.count ?? 0), 0) / pricedTotal
+        : null;
+
+    // your existing median helper works over avgRows; it should also use priced counts.
+    // If weightedMedian(avgRows) already accepts r.count, change it to use r.pricedCount inside that helper.
+    const weightedMed = weightedMedian(
+      avgRows.map((r: any) => ({ ...r, count: r.pricedCount ?? r.count ?? 0 }))
+    );
+
     const rkCount = avgRows.length;
-    return { totalListings, weightedAvg, weightedMed, rkCount };
+
+    return { totalListings: pricedTotal, weightedAvg, weightedMed, rkCount };
   }, [avgRows]);
 
   // Min/Max & median from the live rows (already filtered & trimmed upstream)

@@ -4,7 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Listing } from "@/lib/types";
 import { SURFACE } from "@/lib/ui";
-import { ListingCardSidebar } from "@/components/cards";
+import { ListingCard } from "@/components/ListingCard";
 import ScrollContainer from "@/components/ui/ScrollContainer";
 
 type Props = {
@@ -198,9 +198,52 @@ function Pager({
 
 /* ---------- NEW: sort helpers ---------- */
 type SortMode = "relevance" | "priceAsc" | "priceDesc";
+
 function priceForSort(listing: Listing): number {
   const p = (listing.price ?? 0) as number;
   return p > 0 && Number.isFinite(p) ? p : Number.POSITIVE_INFINITY; // POA/0 → end
+}
+
+/** Count how many distinct sources a listing has. Defensive across shapes. */
+function sourcesCount(listing: Listing): number {
+  // Common shapes:
+  // - listing.sources: string[]
+  // - listing.sources: Record<string, any>
+  // - listing.source / listing.provider: string
+  // - listing.sourceUrls: string[]
+  // - listing.mergedFrom: string[] (fallback)
+  const anyL = listing as any;
+
+  if (Array.isArray(anyL.sources)) {
+    return anyL.sources.filter(Boolean).length;
+  }
+  if (anyL.sources && typeof anyL.sources === "object") {
+    return Object.keys(anyL.sources).length;
+  }
+  if (Array.isArray(anyL.sourceUrls)) {
+    return anyL.sourceUrls.filter(Boolean).length;
+  }
+  if (Array.isArray(anyL.mergedFrom)) {
+    return anyL.mergedFrom.filter(Boolean).length;
+  }
+  if (typeof anyL.source === "string" && anyL.source) return 1;
+  if (typeof anyL.provider === "string" && anyL.provider) return 1;
+  return 0;
+}
+
+/** Stable-ish comparator for relevance (by sources desc, then id asc, then price asc). */
+function cmpRelevance(a: Listing, b: Listing): number {
+  const ca = sourcesCount(a);
+  const cb = sourcesCount(b);
+  if (cb !== ca) return cb - ca; // more sources → earlier
+
+  // Secondary tie-breakers to keep things deterministic:
+  const aid = String((a as any).id ?? "");
+  const bid = String((b as any).id ?? "");
+  if (aid !== bid) return aid.localeCompare(bid);
+
+  // Last resort: by price ascending
+  return priceForSort(a) - priceForSort(b);
 }
 
 export default function Sidebar({
@@ -213,7 +256,7 @@ export default function Sidebar({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(48);
 
-  // NEW: sort state
+  // sort state
   const [sort, setSort] = useState<SortMode>("relevance");
 
   // clamp page when list changes
@@ -226,11 +269,12 @@ export default function Sidebar({
   // scroll-to-top hook for virtualized list
   const scrollTopRef = useRef<(() => void) | null>(null);
 
-  // NEW: sorted copy (never mutate props)
+  // sorted copy (never mutate props)
   const sortedRows = useMemo(() => {
-    if (sort === "relevance") return visibleRows;
     const arr = [...visibleRows];
-    if (sort === "priceAsc") {
+    if (sort === "relevance") {
+      arr.sort(cmpRelevance);
+    } else if (sort === "priceAsc") {
       arr.sort((a, b) => priceForSort(a) - priceForSort(b));
     } else if (sort === "priceDesc") {
       arr.sort((a, b) => priceForSort(b) - priceForSort(a));
@@ -266,7 +310,7 @@ export default function Sidebar({
       <div className="h-11 flex items-center justify-between px-3 shrink-0">
         <div className="text-sm font-medium">Listings</div>
 
-        {/* NEW: sort control */}
+        {/* sort control */}
         <div className="flex items-center gap-2">
           <label htmlFor="sort" className="text-xs">Sort</label>
           <select
@@ -325,7 +369,7 @@ export default function Sidebar({
           overscan={8}
           onMountTopScrollRef={scrollTopRef}
           renderItem={(r) => (
-            <ListingCardSidebar
+            <ListingCard
               key={r.id}
               listing={r}
               selected={r.id === selectedId}
@@ -339,7 +383,7 @@ export default function Sidebar({
         <ScrollContainer className="flex-1 min-h-0">
           <div className="px-3 pb-3 grid gap-3">
             {pageSlice.map((r) => (
-              <ListingCardSidebar
+              <ListingCard
                 key={r.id}
                 listing={r}
                 selected={r.id === selectedId}

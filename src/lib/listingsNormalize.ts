@@ -14,11 +14,8 @@ export type RawListing = {
   asking?: number | null | string;
   askingPrice?: number | null | string;
   priceEuro?: number | null | string;
-  rent?: number | null | string;
-  monthlyRent?: number | null | string;
 
   type?: string | null;
-  saleOrRent?: string | null;
   listingType?: string | null;
 
   eircode?: string | null;
@@ -70,30 +67,6 @@ export function parseMoneyLike(v: unknown): number | null {
     return Number.isFinite(n) ? n : null;
   }
   return null;
-}
-
-export type ListingType = "sale" | "rent";
-
-export function inferType(d: RawListing): ListingType {
-  const raw = (d.type ?? d.saleOrRent ?? d.listingType ?? "").toString().toLowerCase();
-  if (raw.includes("rent")) return "rent";
-  if (raw.includes("sale") || raw === "") {
-    if (d.rent != null || d.monthlyRent != null) return "rent";
-    return "sale";
-  }
-  return (raw as ListingType) ?? "sale";
-}
-
-export function firstPrice(d: RawListing): number | null {
-  const sale =
-    parseMoneyLike(d.price) ??
-    parseMoneyLike(d.askingPrice) ??
-    parseMoneyLike(d.asking) ??
-    parseMoneyLike(d.priceEuro);
-  if (sale != null) return sale;
-
-  const rent = parseMoneyLike(d.rent) ?? parseMoneyLike(d.monthlyRent);
-  return rent != null ? rent : null;
 }
 
 /** Narrowing helpers (so no ts-ignore needed) */

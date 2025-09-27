@@ -4,7 +4,7 @@ export type Filters = {
   type?: ListingType;          // sale | rent (default sale)
   kind?: PropertyKind;         // house | apartment
   counties?: string[];         // multi
-  sources?: string[];          // multi (e.g. ["Daft","MyHome"])
+  sources?: string[];          // multi (e.g. ["MyHome"])
   bedsMin?: number;
   bedsMax?: number;
   priceMin?: number;
@@ -22,7 +22,7 @@ export const IRELAND_COUNTIES = [
   "Wexford","Wicklow",
 ];
 
-export const AVAILABLE_SOURCES = ["Daft","MyHome","FindQo"]; // extend as needed
+export const AVAILABLE_SOURCES = ["SherryFitz","MyHome","FindQo","DNG"]; 
 
 export const priceDomain = (type: ListingType) => {
   const isRent = type === "rent";

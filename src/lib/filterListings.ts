@@ -1,11 +1,13 @@
 import type { Filters } from "./filters";
 import type { Listing } from "@/lib/types";
 
-/** Normalize to "Daft" | "MyHome" from a URL host */
+/** Normalize to "MyHome" from a URL host */
 function hostToSourceName(host?: string | null): string | null {
   if (!host) return null;
   const h = host.replace(/^https?:\/\//, "").replace(/^www\./, "").toLowerCase();
-  if (h.includes("daft")) return "Daft";
+  if (h.includes("sherryfitz")) return "SherryFitz";
+  if (h.includes("dng")) return "DNG";
+  if (h.includes("findqo")) return "FindQo";
   if (h.includes("myhome")) return "MyHome";
   return null;
 }

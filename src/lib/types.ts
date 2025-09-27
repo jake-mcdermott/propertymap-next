@@ -17,7 +17,7 @@ export type Listing = {
   createdAt: string;  // ISO
   eircode?: string; // populated by API from Firestore key
 
-  /** Optional array of sources (Daft, MyHome, Agent website, etc.) */
+  /** Optional array of sources (MyHome, Agent website, etc.) */
   sources?: Array<{
     name: string;
     url: string;

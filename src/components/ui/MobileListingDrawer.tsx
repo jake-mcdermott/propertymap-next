@@ -30,17 +30,17 @@ type SourceItem = { name: string; url: string };
 
 const brandFromHost = (host: string) => {
   const h = host.replace(/^www\./, "").toLowerCase();
-  if (h.includes("daft")) return "daft";
   if (h.includes("myhome")) return "myhome";
   if (h.includes("findqo")) return "findqo";
   if (h.includes("sherryfitz")) return "sherryfitz";
+  if (h.includes("dng")) return "dng";
   if (h.includes("propertypal")) return "propertypal";
   if (h.includes("rightmove")) return "rightmove";
   if (h.includes("zoopla")) return "zoopla";
   return "generic";
 };
 const prettyName = (b: string) =>
-  ({ daft: "Daft", myhome: "MyHome", findqo: "Findqo", sherryfitz: "SherryFitz", propertypal: "PropertyPal", rightmove: "Rightmove", zoopla: "Zoopla" } as Record<string,string>)[b] || "Source";
+  ({ myhome: "MyHome", findqo: "Findqo", sherryfitz: "SherryFitz", dng: "DNG", propertypal: "PropertyPal", rightmove: "Rightmove", zoopla: "Zoopla" } as Record<string,string>)[b] || "Source";
 
 function SourcePill({ item }: { item: SourceItem }) {
   let host = "";
@@ -48,7 +48,7 @@ function SourcePill({ item }: { item: SourceItem }) {
   const brand = brandFromHost(host);
   const label = item.name || prettyName(brand) || host.replace(/^www\./, "") || "Source";
   const logoFor = (b: string) =>
-    ["daft","myhome","findqo","sherryfitz","propertypal","rightmove","zoopla"].includes(b)
+    ["myhome","findqo","sherryfitz","dng","propertypal","rightmove","zoopla"].includes(b)
       ? `/logos/${b}.png`
       : `/logos/generic.png`;
 

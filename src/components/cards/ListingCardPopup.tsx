@@ -1,28 +1,96 @@
 // src/components/map/ListingCardPopup.tsx
 "use client";
 
+import React, { useState } from "react";
 import type { Listing } from "@/lib/types";
 import { MapPin, BedDouble, Bath, ExternalLink } from "lucide-react";
 import { splitAddress, countyAndEircode } from "./_shared";
 
-type Source = { name: string; url: string };
+/* ------------ shared source helpers (same look as sidebar) ------------ */
+type SourceItem = { name?: string; url: string };
 
-function isSource(v: unknown): v is Source {
-  if (typeof v !== "object" || v === null) return false;
-  const o = v as Record<string, unknown>;
-  return typeof o.url === "string" && typeof o.name === "string";
+function brandFromHost(host: string): string {
+  const h = host.replace(/^www\./, "").toLowerCase();
+  if (h.includes("myhome")) return "myhome";
+  if (h.includes("sherryfitz")) return "sherryfitz";
+  if (h.includes("dng")) return "dng";
+  if (h.includes("propertypal")) return "propertypal";
+  if (h.includes("rightmove")) return "rightmove";
+  if (h.includes("zoopla")) return "zoopla";
+  if (h.includes("propertymap") || h.includes("findqo")) return "findqo";
+  return "generic";
+}
+function prettyName(brand: string): string {
+  switch (brand) {
+    case "myhome": return "MyHome";
+    case "sherryfitz": return "SherryFitz";
+    case "dng": return "DNG";
+    case "propertypal": return "PropertyPal";
+    case "rightmove": return "Rightmove";
+    case "zoopla": return "Zoopla";
+    case "findqo": return "PropertyMap";
+    default: return "Source";
+  }
+}
+function deriveSources(listing: Listing): SourceItem[] {
+  const primary = listing.url as string | undefined;
+  const extra = (listing as any).sources as Array<{ name?: string; url: string }> | undefined;
+
+  const fallback: SourceItem[] = primary ? [{ name: undefined, url: primary }] : [];
+  const src = (extra && extra.length ? extra : fallback).slice(0, 8);
+
+  return src.map((s) => ({ name: s.name?.trim(), url: s.url }));
 }
 
+/* Same pill UI as your sidebar/listing card */
+function SourcePill({ item }: { item: SourceItem }) {
+  let host = "";
+  try { host = new URL(item.url).host; } catch {}
+  const brand = brandFromHost(host);
+  const label = item.name || prettyName(brand) || host.replace(/^www\./, "") || "Source";
+  const logoFor = (b: string) =>
+    ["myhome","findqo","sherryfitz","dng","propertypal","rightmove","zoopla"].includes(b)
+      ? `/logos/${b}.png`
+      : `/logos/generic.png`;
+
+  const [src, setSrc] = useState(logoFor(brand));
+
+  return (
+    <a
+      href={item.url}
+      target="_blank"
+      rel="noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] leading-none
+                bg-white/10 text-white ring-1 ring-white/10
+                hover:bg-white hover:text-black"
+      title={label}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        width={14}
+        height={14}
+        className="h-3.5 w-3.5 rounded-[3px] object-contain"
+        onError={() => { if (src !== "/logos/generic.png") setSrc("/logos/generic.png"); }}
+        loading="lazy"
+      />
+      <span className="whitespace-nowrap">{label}</span>
+      <ExternalLink className="h-3.5 w-3.5 opacity-70 text-current" strokeWidth={1.6} />
+    </a>
+  );
+}
+
+/* ---------------------- component ---------------------- */
 export default function ListingCardPopup({ listing }: { listing: Listing }) {
   const { primary } = splitAddress(listing.address, listing.county);
   const title = listing.address?.trim() || primary;
   const countyEir = countyAndEircode(listing);
 
   const hasCoords =
-    typeof listing.lat === "number" &&
-    !Number.isNaN(listing.lat) &&
-    typeof listing.lng === "number" &&
-    !Number.isNaN(listing.lng);
+    typeof listing.lat === "number" && !Number.isNaN(listing.lat) &&
+    typeof listing.lng === "number" && !Number.isNaN(listing.lng);
 
   const gmapsUrl = hasCoords
     ? `https://www.google.com/maps/search/?api=1&query=${listing.lat},${listing.lng}`
@@ -33,17 +101,13 @@ export default function ListingCardPopup({ listing }: { listing: Listing }) {
   const bathsLabel =
     listing.baths != null ? `${listing.baths} Bath${listing.baths === 1 ? "" : "s"}` : null;
 
-  // ---- SAFE SOURCES ----
-  const maybeSources = (listing as { sources?: unknown }).sources;
-  const sources: Source[] = Array.isArray(maybeSources)
-    ? (maybeSources as unknown[]).filter(isSource)
-    : [];
-  const hasSources = sources.length > 0;
+  const srcs = deriveSources(listing);
+  const hasSources = srcs.length > 0;
 
   function displayPrice(price?: number | null) {
     if (!price || price <= 0) return "POA";
     return `€${price.toLocaleString()}`;
-    }
+  }
 
   return (
     <div className="w-[320px] overflow-hidden rounded-lg text-white bg-black border border-white/16 select-none">
@@ -120,45 +184,16 @@ export default function ListingCardPopup({ listing }: { listing: Listing }) {
         {/* Divider (only if we have sources) */}
         {hasSources && <div className="h-px bg-white/12 mt-2 mb-0" />}
 
-        {/* Sources */}
+        {/* Sources — identical pill styling */}
         {hasSources && (
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
-            {sources.slice(0, 6).map((src) => {
-              const slug = (src.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "").trim();
-              return (
-                <a
-                  key={src.url}
-                  href={src.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="group inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] font-medium
-                            !text-white visited:!text-white hover:!text-white active:!text-white focus:!text-white
-                            ring-1 ring-inset ring-white/15 hover:ring-white/25
-                            bg-white/10 hover:bg-white/16
-                            no-underline transition-colors shadow-sm"
-                  title={src.name}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={`/logos/${slug}.png`}
-                    alt=""
-                    className="h-3.5 w-3.5 rounded-[4px] object-cover ring-1 ring-black/10 bg-white"
-                    loading="lazy"
-                    onError={(e) => ((e.currentTarget as HTMLImageElement).style.display = "none")}
-                  />
-                  <span className="truncate max-w-[120px] opacity-95">{src.name}</span>
-                  <ExternalLink
-                    className="h-3.5 w-3.5 opacity-80 group-hover:opacity-100"
-                    strokeWidth={1.6}
-                  />
-                </a>
-              );
-            })}
-            {sources.length > 6 && (
+            {srcs.slice(0, 6).map((s, i) => (
+              <SourcePill key={`${listing.id}-pop-${i}-${s.url}`} item={s} />
+            ))}
+            {srcs.length > 6 && (
               <span className="inline-flex items-center rounded-full px-2.5 py-1 text-[11.5px]
                               text-white/90 ring-1 ring-inset ring-white/12 bg-white/8">
-                +{sources.length - 6} more
+                +{srcs.length - 6} more
               </span>
             )}
           </div>
