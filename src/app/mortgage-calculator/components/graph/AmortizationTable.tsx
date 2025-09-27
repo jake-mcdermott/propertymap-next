@@ -86,7 +86,7 @@ export default function AmortizationTable({
   };
 
   return (
-    <div className="bg-neutral-900 shadow-md rounded-xl p-6">
+    <div className="bg-neutral-900 shadow-md p-6 md:rounded-sm rounded-none">
       {/* Toggle + Download */}
       <div className="flex justify-between items-center mb-4">
         <div className="inline-flex rounded-md border border-gray-600 overflow-hidden">
