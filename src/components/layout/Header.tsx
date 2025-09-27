@@ -66,7 +66,7 @@ export default function Header() {
         <NavLink href="/insights" minimal={minimal}>
           Insights
         </NavLink>
-        <NavLink href="/mortgage-calc" minimal={minimal}>
+        <NavLink href="/mortgage-calculator" minimal={minimal}>
           Mortgage Calc
         </NavLink>
         <NavLink href="/contact" minimal={minimal}>
