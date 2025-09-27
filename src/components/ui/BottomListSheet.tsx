@@ -13,7 +13,7 @@ type Props = {
   rows: Listing[];
   loading: boolean;
 
-  /** These can stay wired, but this component now derives slice locally from `rows` + sort */
+  /** Kept for compatibility; slice is derived locally from rows + sort */
   pageSlice: Listing[];
   scrollKey: string;
   page: number;
@@ -21,6 +21,10 @@ type Props = {
   setPage: (p: number) => void;
   pageSize: number;
   setPageSize: (n: number) => void;
+
+  /** NEW: optional controlled open/close (used for same-point clusters) */
+  open?: boolean;           // when provided: true → full snap, false → peek snap
+  onClose?: () => void;     // called after user drags to peek while open
 };
 
 /* ---------- sort helpers (match Sidebar) ---------- */
@@ -43,7 +47,7 @@ function sourcesCount(listing: Listing): number {
   return 0;
 }
 
-/** Relevance: sources desc, then id asc, then price asc (stable-ish) */
+/** Relevance: sources desc, then id asc, then price asc */
 function cmpRelevance(a: Listing, b: Listing): number {
   const ca = sourcesCount(a);
   const cb = sourcesCount(b);
@@ -59,7 +63,6 @@ export default function BottomListSheet({
   rows,
   loading,
 
-  // still accepted but ignored for slicing (we compute from rows + sort)
   pageSlice: _pageSliceProp,
   scrollKey,
   page,
@@ -67,6 +70,9 @@ export default function BottomListSheet({
   setPage,
   pageSize,
   setPageSize,
+
+  open,
+  onClose,
 }: Props) {
   const panelRef = useRef<HTMLDivElement>(null);
   const grabRef = useRef<HTMLDivElement>(null);
@@ -86,7 +92,7 @@ export default function BottomListSheet({
   const [height, setHeight] = useState<number>(0); // set after measure
   const [dragging, setDragging] = useState(false);
 
-  // --- NEW: sort state + derived rows / paging ---
+  // --- sort state + derived rows / paging ---
   const [sort, setSort] = useState<SortMode>("relevance");
 
   const sortedRows = useMemo(() => {
@@ -148,6 +154,14 @@ export default function BottomListSheet({
   const nearestSnap = (h: number, snaps: SnapHeights = snapHeights) =>
     Math.abs(h - snaps[0]) <= Math.abs(h - snaps[1]) ? snaps[0] : snaps[1];
 
+  // When parent controls `open`, move to the appropriate snap AFTER we have snaps
+  useEffect(() => {
+    if (!ready) return;
+    if (open == null) return; // uncontrolled mode
+    const [peek, full] = snapHeights;
+    setHeight(open ? full : peek);
+  }, [open, ready, snapHeights]);
+
   // Drag state is bound to the handle only (list can scroll freely)
   const dragState = useRef<{ pointerId: number | null; startY: number; startHeight: number }>({
     pointerId: null,
@@ -180,12 +194,31 @@ export default function BottomListSheet({
       try { grabRef.current?.releasePointerCapture(id); } catch {}
     }
     setDragging(false);
-    setHeight((h) => nearestSnap(h));
+
+    // Snap to nearest and, if controlled-open and snapped to peek, notify parent to close.
+    setHeight((h) => {
+      const snapped = nearestSnap(h);
+      const [peek] = snapHeights;
+
+      if (open && snapped === peek && onClose) {
+        // Defer to next tick to avoid "setState during render" in parent
+        requestAnimationFrame(() => onClose());
+      }
+      return snapped;
+    });
   };
 
   const toggleSnap = () => {
     const [peek, full] = snapHeights;
-    setHeight((h) => (Math.abs(h - peek) < 6 ? full : peek));
+    setHeight((h) => {
+      const target = Math.abs(h - peek) < 6 ? full : peek;
+
+      // If parent controls open and user toggles to peek, notify close
+      if (open && target === peek && onClose) {
+        requestAnimationFrame(() => onClose());
+      }
+      return target;
+    });
   };
 
   // Pagination
@@ -286,7 +319,7 @@ export default function BottomListSheet({
           </div>
 
           {/* Scroll area (between handle and footer) */}
-          <div className="absolute inset-x-0" style={{ top: HEADER_H, bottom: FOOTER_H }}>
+          <div className="absolute inset-x-0" style={{ top: 104, bottom: 48 }}>
             <div className="h-full" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
               <ScrollContainer className="h-full" key={scrollKey}>
                 {rows.length === 0 && !loading && (
@@ -313,7 +346,7 @@ export default function BottomListSheet({
             <div
               className="absolute inset-x-0 z-10 border-t border-white/10 bg-black"
               style={{
-                height: FOOTER_H,
+                height: 48,
                 bottom: 0,
                 paddingBottom: "env(safe-area-inset-bottom, 0px)",
               }}
@@ -326,11 +359,11 @@ export default function BottomListSheet({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={goPrev}
-                    disabled={!canPrev}
+                    onClick={() => canPrev && setPage(page - 1)}
+                    disabled={page <= 1}
                     className={[
                       "px-3 py-1.5 text-sm rounded-md ring-1",
-                      canPrev
+                      page > 1
                         ? "bg-white/5 ring-white/15 hover:bg-white/10 text-slate-100"
                         : "bg-white/5 ring-white/10 text-slate-500 cursor-not-allowed",
                     ].join(" ")}
@@ -339,11 +372,11 @@ export default function BottomListSheet({
                   </button>
                   <button
                     type="button"
-                    onClick={goNext}
-                    disabled={!canNext}
+                    onClick={() => page < localTotalPages && setPage(page + 1)}
+                    disabled={page >= localTotalPages}
                     className={[
                       "px-3 py-1.5 text-sm rounded-md ring-1",
-                      canNext
+                      page < localTotalPages
                         ? "bg-white/5 ring-white/15 hover:bg-white/10 text-slate-100"
                         : "bg-white/5 ring-white/10 text-slate-500 cursor-not-allowed",
                     ].join(" ")}

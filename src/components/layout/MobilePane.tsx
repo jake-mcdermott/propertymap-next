@@ -5,8 +5,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import type { Listing } from "@/lib/types";
 import { SURFACE, SURFACE_SOFT, HAIRLINE } from "@/lib/ui";
-import { ListingCard } from "@/components/ListingCard";
-import ScrollContainer from "@/components/ui/ScrollContainer";
 import FiltersDialog from "@/components/filters/FiltersDialog";
 import type { Filters, ListingType } from "@/lib/filters";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
@@ -90,6 +88,12 @@ export default function MobilePane({
   const [copied, setCopied] = useState(false);
   const { filters, replaceFilters } = useUrlFilters();
 
+  /** Sheet control for same-point clusters */
+  const [clusterOverrideIds, setClusterOverrideIds] = useState<string[] | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetKey, setSheetKey] = useState(0); // forces remount to re-open same ids repeatedly
+  const openGuardRef = useRef(false); // prevents instant close during open animation
+
   const handleCopy = async () => {
     const url = window.location.href;
     try {
@@ -108,51 +112,92 @@ export default function MobilePane({
     replaceFilters(cleared, { resetViewportOnTypeChange: true });
   };
 
-  // Keep old behavior for cluster-pick: ensure we're on "map" and select the first item
+  /** Open the list sheet for provided ids */
+  const openClusterSheet = (ids: string[]) => {
+    setClusterOverrideIds([...ids]); // clone to ensure state change even if same contents
+    setSheetOpen(true);
+    setSheetKey((k) => k + 1); // remount for clean animation & reopen same cluster
+
+    openGuardRef.current = true;
+    setTimeout(() => {
+      openGuardRef.current = false;
+    }, 320); // ~ keep in sync with panel transition
+  };
+
+  /** Close requested by the sheet (drag down to peek) */
+  const handleSheetClose = () => {
+    if (openGuardRef.current) return;
+    setSheetOpen(false);
+    // keep clusterOverrideIds set so a second tap on the same cluster opens immediately
+  };
+
+  // Listen for cluster picks (LeafletMap dispatches { openSheet: true } for “same point”)
   useEffect(() => {
     const onPick = (e: Event) => {
-      const { ids } = (e as CustomEvent).detail as { ids: string[]; lat: number; lng: number };
+      const { ids, openSheet } = (e as CustomEvent).detail as {
+        ids: string[];
+        lat: number;
+        lng: number;
+        openSheet?: boolean;
+      };
       if (!ids?.length) return;
-      onSelect(ids[0]);
+
       setMobileView("map");
-      // Nudge a resize in case the map view was hidden
+
+      if (openSheet) {
+        onCloseActive?.(); // ensure single-listing drawer is closed
+        openClusterSheet(ids);
+        requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+        return;
+      }
+
+      // Default: pick first item → single drawer
+      onSelect(ids[0]);
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     };
+
     window.addEventListener("map:cluster-pick", onPick as EventListener);
     return () => window.removeEventListener("map:cluster-pick", onPick as EventListener);
-  }, [onSelect, setMobileView]);
+  }, [onSelect, setMobileView, onCloseActive]);
 
   // Pagination
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(24);
 
+  // If showing a tiny cluster list, make sure it fits one page
   useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+    if (clusterOverrideIds?.length) {
+      setPageSize(Math.max(24, clusterOverrideIds.length));
+      setPage(1);
+    }
+  }, [clusterOverrideIds]);
+
+  // Compute the sheet rows: cluster override (when set) or visible viewport rows
+  const sheetRows = useMemo(() => {
+    if (!clusterOverrideIds?.length) return visibleRows;
+    const keep = new Set(clusterOverrideIds);
+    return visibleRows.filter((r) => keep.has(r.id));
+  }, [visibleRows, clusterOverrideIds]);
+
+  useEffect(() => {
+    const totalPages = Math.max(1, Math.ceil(sheetRows.length / pageSize));
     if (page > totalPages) setPage(totalPages);
     if (page < 1) setPage(1);
-  }, [visibleRows.length, page, pageSize]);
+  }, [sheetRows.length, page, pageSize]);
 
   useEffect(() => {
     setPage(1);
   }, [filters]);
 
   const { pageSlice, totalPages } = useMemo(() => {
-    const total = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+    const total = Math.max(1, Math.ceil(sheetRows.length / pageSize));
     const p = Math.min(Math.max(1, page), total);
     const start = (p - 1) * pageSize;
-    const end = Math.min(start + pageSize, visibleRows.length);
-    return { pageSlice: visibleRows.slice(start, end), totalPages: total };
-  }, [visibleRows, page, pageSize]);
+    const end = Math.min(start + pageSize, sheetRows.length);
+    return { pageSlice: sheetRows.slice(start, end), totalPages: total };
+  }, [sheetRows, page, pageSize]);
 
   const scrollKey = `${page}-${pageSize}`;
-
-  const headerRange = useMemo(() => {
-    if (loading) return "…";
-    if (visibleRows.length === 0) return "0";
-    const start = (page - 1) * pageSize + (pageSlice.length ? 1 : 0);
-    const end = (page - 1) * pageSize + pageSlice.length;
-    return `${start}–${end} of ${visibleRows.length}`;
-  }, [loading, visibleRows.length, page, pageSize, pageSlice.length]);
 
   const mapAreaRef = useRef<HTMLDivElement>(null);
 
@@ -195,7 +240,6 @@ export default function MobilePane({
       <div ref={mapAreaRef} className="flex-1 min-h-0 relative h-full">
         {/* Map fills the container */}
         <div className={`${SURFACE_SOFT} absolute inset-0 h-full w-full`}>
-          {/* Key is the crucial part: remount MapContainer when key changes */}
           <PropertyMap
             key={mapMountKey}
             listings={listings}
@@ -209,8 +253,9 @@ export default function MobilePane({
 
         {/* Bottom draggable list sheet overlays the map */}
         <BottomListSheet
+          key={sheetKey}
           containerRef={mapAreaRef as React.RefObject<HTMLDivElement>}
-          rows={visibleRows}
+          rows={sheetRows}
           loading={loading}
           pageSlice={pageSlice}
           scrollKey={scrollKey}
@@ -219,6 +264,8 @@ export default function MobilePane({
           setPage={setPage}
           pageSize={pageSize}
           setPageSize={setPageSize}
+          open={!!clusterOverrideIds && sheetOpen} // controlled only in cluster mode
+          onClose={handleSheetClose}
         />
       </div>
 

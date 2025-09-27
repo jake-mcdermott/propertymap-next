@@ -96,7 +96,7 @@ export default function Header() {
             <div className="mt-4 flex flex-col">
               <MobileItem href="/">Map</MobileItem>
               <MobileItem href="/insights">Insights</MobileItem>
-              <MobileItem href="/mortgage-calc">Mortgage Calculator</MobileItem>
+              <MobileItem href="/mortgage-calculator">Mortgage Calculator</MobileItem>
               <MobileItem href="/contact">Contact</MobileItem>
             </div>
           </SheetContent>
