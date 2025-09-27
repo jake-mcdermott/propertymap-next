@@ -184,6 +184,7 @@ export function createChartData(form: LoanFormData): ChartData {
     totalRepayment,
     totalInterest,
     yearlyCumulative,
+    monthlyRepayment,
   };
 }
 

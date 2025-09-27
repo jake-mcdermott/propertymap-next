@@ -34,15 +34,29 @@ export default function LoanGraphs({ data }: LoanGraphsProps) {
   return (
     <div className="space-y-8">
 
-      <div className="bg-neutral-900 shadow-md rounded-xl mt-6 pb-6">
-        <h2 className="text-xl font-semibold pt-6 pl-6">Repayment Breakdown</h2>
+    <div className="bg-neutral-900 shadow-md md:rounded-sm rounded-none mt-6 pb-6">
+      <h2 className="text-xl font-semibold pt-6 pl-6 text-center md:text-left">
+        Payment Breakdown
+      </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-         
-          {/* Left column: Overall numbers */}
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4 ml-10 text-2xl">
-            <span >Loan Amount</span>
-            <span>
+      <div className="grid grid-cols-1 md:grid-cols-2">
+        {/* Left column: Overall numbers */}
+        <div className="flex flex-col items-center md:items-start md:ml-10">
+          {/* Monthly payment box */}
+          <div className="text-md p-4 my-10 border rounded-md w-64 text-center md:text-left">
+            <span className="block mb-1">Monthly Payment</span>
+            <span className="font-semibold">
+              {new Intl.NumberFormat("en-IE", {
+                style: "currency",
+                currency: "EUR",
+              }).format(data.monthlyRepayment)}
+            </span>
+          </div>
+
+          {/* Loan summary grid */}
+          <div className="grid grid-cols-2 gap-y-4 text-md w-64 mt-6 md:mt-0">
+            <span>Loan Amount</span>
+            <span className="text-right">
               {new Intl.NumberFormat("en-IE", {
                 style: "currency",
                 currency: "EUR",
@@ -50,7 +64,8 @@ export default function LoanGraphs({ data }: LoanGraphsProps) {
             </span>
 
             <span>Total Interest</span>
-            <span>
+            <span className="text-right">
+              <span className="mr-1">+</span>
               {new Intl.NumberFormat("en-IE", {
                 style: "currency",
                 currency: "EUR",
@@ -58,23 +73,26 @@ export default function LoanGraphs({ data }: LoanGraphsProps) {
             </span>
 
             <span>Total Repayment</span>
-            <span>
+            <span className="text-right font-semibold">
+              <span className="mr-1">=</span>
               {new Intl.NumberFormat("en-IE", {
                 style: "currency",
                 currency: "EUR",
               }).format(data.totalRepayment)}
             </span>
           </div>
+        </div>
 
-          {/* Right column: Pie Chart */}
-          <div className="h-90 flex justify-center items-center">
-            <PieChartGraph pieData={pieData} />
-          </div>
+        {/* Right column: Pie Chart */}
+        <div className="h-90 flex justify-center items-center mt-6 md:mt-0">
+          <PieChartGraph pieData={pieData} />
         </div>
       </div>
+    </div>
+
 
       {/* Line Chart */}
-      <div className="bg-neutral-900 shadow-md rounded-xl p-6 mt-6">
+      <div className="bg-neutral-900 shadow-md md:rounded-sm rounded-none p-6 mt-6">
         <h2 className="text-xl font-semibold mb-4">Loan Overview</h2>
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">

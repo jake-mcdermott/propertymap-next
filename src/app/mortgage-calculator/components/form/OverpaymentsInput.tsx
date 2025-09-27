@@ -145,7 +145,7 @@ export default function OverpaymentsInput({ form, setForm }: Props) {
               <button
                 type="button"
                 onClick={() => removeIrregular(entry.id)}
-                className="bg-red-500 text-white px-3 py-2 rounded-lg hover:bg-red-600"
+                className="bg-red-500 text-white px-3 py-2 hover:bg-red-600"
               >
                 ✕
               </button>
@@ -156,7 +156,7 @@ export default function OverpaymentsInput({ form, setForm }: Props) {
         <button
           type="button"
           onClick={addIrregular}
-          className="mt-3 bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600"
+          className="mt-3 bg-green-500 text-white px-4 py-2 hover:bg-green-600"
         >
           + Add Overpayment
         </button>

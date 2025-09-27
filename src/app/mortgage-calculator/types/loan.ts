@@ -52,6 +52,7 @@ export interface ChartData {
     totalRepayment: number;
     totalInterest: number;
     yearlyCumulative: YearlyCumulativeData[];
+    monthlyRepayment: number;
 }
 
 export type OverpaymentMode = "reduceTerm" | "reduceRepayment";

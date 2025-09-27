@@ -19,7 +19,7 @@ interface BarChartGraphProps {
 
 export default function BarChartGraph({yearlyAmortization} : BarChartGraphProps) {
     return (
-<div className="bg-neutral-900 shadow-md rounded-xl p-4">
+<div className="bg-neutral-900 shadow-md md:rounded-sm rounded-none p-4">
         <h2 className="text-xl font-semibold mb-4">
           Yearly Principal vs Interest + Cumulative Total
         </h2>

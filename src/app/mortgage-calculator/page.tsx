@@ -12,15 +12,17 @@ export const metadata: Metadata = {
 
 export default function Page() {
 
-  return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
-      <Header />
-      <main className="flex-1 w-full px-4 sm:px-6 md:px-8 py-4 md:py-6">
-        <MortgageCalcWrapper/>
-      </main>
-      <Footer />
-    </div>
-  );
+return (
+  <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col">
+    <Header />
+    <main className="flex-1 flex justify-center py-4">
+      <div className="w-full md:w-11/12">
+        <MortgageCalcWrapper />
+      </div>
+    </main>
+    <Footer />
+  </div>
+);
 }
 
 // add writing, add description, add disclaimer, add monthly amount

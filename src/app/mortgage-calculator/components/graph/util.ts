@@ -11,4 +11,6 @@ export const INTEREST_COLOUR = "#ffa600"
 export const TOTAL_COLOUR = "#003f5c"
 export const BALANCE_COLOUR = "#58508d"
 
+export const PRIMARY_BLUE = "#01677c"
+
 export const COLORS = [PRINCIPAL_COLOUR, INTEREST_COLOUR]; 
