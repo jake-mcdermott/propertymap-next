@@ -30,16 +30,15 @@ export default function MortgageCalcWrapper() {
 
   return (
     <div>
-        <form onSubmit={handleSubmit} className="bg-neutral-900 p-6 md:rounded-sm rounded-none">
+        <form onSubmit={handleSubmit} className="bg-neutral-800/20 p-6 md:rounded-md rounded-none">
             <LoanForm form={form} setForm={setForm} />
-            <div className="flex justify-center">
+            <div className="flex justify-center gap-5">
               <button
-              type="submit"
-                className="mt-4 w-3/4 bg-[#01677c] text-white font-semibold py-2 px-4 hover:bg-blue-700 hover:cursor-pointer transition"
-                >
+                type="submit"
+                className="mt-4 w-1/4 mx-auto text-center cursor-pointer rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 hover:bg-white/10 hover:font-bold active:scale-[0.99] touch-manipulation"
+              >
                 Generate Graphs
               </button>
-
             </div>
         </form>
 

@@ -29,12 +29,12 @@ export const GenericCustomTooltip: React.FC<GenericTooltipProps> = ({
     : payload;
 
  return (
-      <div className="bg-neutral-800 p-2 rounded shadow text-sm">
-        <p className="font-medium">Year {label}</p>
+      <div className="bg-black border border-white p-3 rounded-md shadow text-sm">
+        <p className="text-md font-bold">Year {label}</p>
         {sorted.map(
           (item) =>
             item && (
-              <p key={item.dataKey} style={{ color: item.color }}>
+              <p className="pt-1" key={item.dataKey} style={{ color: item.color }}>
                 {item.name}:{" "}
                 {new Intl.NumberFormat("en-IE", {
                   style: "currency",
