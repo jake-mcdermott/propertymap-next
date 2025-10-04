@@ -1,6 +1,7 @@
 // src/app/feedback/page.tsx
 import type { Metadata } from "next";
 import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 import Link from "next/link";
 
 export const metadata: Metadata = {
@@ -31,11 +32,7 @@ export default function ContactPage() {
       </section>
 
       {/* Subtle footer */}
-      <footer className="border-t border-white/10 ">
-        <div className="mx-auto max-w-6xl px-6 py-3 text-[12.5px] text-slate-400/85 text-center">
-          © {new Date().getFullYear()} PropertyMap.ie
-        </div>
-      </footer>
+      <Footer />
     </main>
   );
 }

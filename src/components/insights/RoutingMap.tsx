@@ -12,10 +12,16 @@ const GeoJSON      = dynamic(async () => (await import("react-leaflet")).GeoJSON
 
 type Row = { rk: string; county: string | null; avg: number; count: number; lat?: number | null; lng?: number | null };
 
+type Props = {
+  rows: Row[];
+  valueLabel?: string;              // e.g., "Avg Price" or "Avg €/m²"
+  valueFmt?: (n: number) => string; // e.g., €12,345 or €3,456 / m²
+};
+
 const rkPropCandidates = ["ROUTINGKEY","ROUTING_KEY","ROUTE_KEY","RK","EIRCODE","POSTCODE","POSTALCODE","POSTAL_K","POSTAL"];
 const descriptorPropCandidates = ["DESCRIPTOR","Descriptor","DESC","NAME","LABEL","DISPLAYNAME","DISPLAY_NAM","ROUTING_DESC"];
 
-const fmt = (n: number) => "€" + Math.round(n).toLocaleString("en-IE");
+const defaultFmt = (n: number) => "€" + Math.round(n).toLocaleString("en-IE");
 const titleCase = (s: string) => s.replace(/\w\S*/g, (w) => w[0].toUpperCase() + w.slice(1).toLowerCase());
 const extractRK = (val: unknown): string | null => {
   if (val == null) return null;
@@ -23,7 +29,7 @@ const extractRK = (val: unknown): string | null => {
   return /^[A-Z0-9]{3}$/.test(rk) ? rk : null;
 };
 
-export default function RoutingMap({ rows }: { rows: Row[] }) {
+export default function RoutingMap({ rows, valueLabel = "Avg", valueFmt = defaultFmt }: Props) {
   const [geo, setGeo] = React.useState<FeatureCollection | null>(null);
   const [rkProp, setRkProp] = React.useState<string | null>(null);
   const [descProp, setDescProp] = React.useState<string | null>(null);
@@ -99,7 +105,7 @@ export default function RoutingMap({ rows }: { rows: Row[] }) {
     return { type: "FeatureCollection", features: feats };
   }, [geo, rkProp, descProp, rkStats]);
 
-  // Quantile-ish color scale from rows
+  // Color scale from current rows (whatever metric they carry)
   const scale = React.useMemo(() => {
     const avgs = rows.map((x) => x.avg).filter(Number.isFinite).sort((a, b) => a - b);
     if (!avgs.length) return { colorFor: (_: number) => "#555" };
@@ -164,7 +170,7 @@ export default function RoutingMap({ rows }: { rows: Row[] }) {
           />
           {fc && (
             <GeoJSON
-              key={rows.length}
+              key={rows.length + (valueLabel ?? "Avg")}
               data={fc as any}
               style={(feat?: Feature) => {
                 const p = (feat?.properties ?? {}) as any;
@@ -187,7 +193,7 @@ export default function RoutingMap({ rows }: { rows: Row[] }) {
                   <div style="font:12px/1.3 system-ui,-apple-system,Segoe UI,Roboto;color:#000;">
                     <div style="font-weight:600;">${rk ?? "—"} · ${county ? titleCase(county) : "—"}</div>
                     ${desc ? `<div style="margin-top:2px;">${desc}</div>` : ""}
-                    <div>Avg: ${Number.isFinite(avg) ? fmt(avg!) : "—"}</div>
+                    <div>${valueLabel ?? "Avg"}: ${Number.isFinite(avg) ? (valueFmt?.(avg!) ?? defaultFmt(avg!)) : "—"}</div>
                     <div>Sample: ${cnt ?? "—"}</div>
                   </div>`;
                 (layer as any).bindPopup(html);

@@ -16,6 +16,8 @@ export type Listing = {
   images?: string[];
   createdAt: string;  // ISO
   eircode?: string; // populated by API from Firestore key
+  town?: string;
+  sizeSqm?: number;
 
   /** Optional array of sources (MyHome, Agent website, etc.) */
   sources?: Array<{

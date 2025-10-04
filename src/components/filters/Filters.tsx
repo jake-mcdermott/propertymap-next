@@ -15,7 +15,15 @@ function Chip({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
-function ClearableChip({ children, onClear, title }: { children: React.ReactNode; onClear: () => void; title?: string; }) {
+function ClearableChip({
+  children,
+  onClear,
+  title,
+}: {
+  children: React.ReactNode;
+  onClear: () => void;
+  title?: string;
+}) {
   return (
     <button
       type="button"
@@ -29,17 +37,14 @@ function ClearableChip({ children, onClear, title }: { children: React.ReactNode
     </button>
   );
 }
-const kindLabel = (k?: Filters["kind"]) => (!k ? "Any" : k[0].toUpperCase() + k.slice(1));
 
 export default function FiltersBar() {
   const { filters: urlFilters, replaceFilters } = useUrlFilters();
   const [open, setOpen] = useState(false);
   const [chipFilters, setChipFilters] = useState<Filters>(urlFilters);
 
-  // Sync with URL
   useEffect(() => setChipFilters(urlFilters), [urlFilters]);
 
-  // Reset everything but preserve type and reset viewport
   const handleReset = () => {
     const { enforcedType } = deriveEffective(chipFilters);
     const reset: Filters = { type: enforcedType };
@@ -51,10 +56,9 @@ export default function FiltersBar() {
   const chipNodes = useMemo(() => {
     const { enforcedType, isRent, bedsMinEff, bedsMaxEff, priceMinEff, priceMaxEff } =
       deriveEffective(chipFilters);
-  
+
     const chips: React.ReactNode[] = [];
-  
-    // Counties (each county is individually clearable)
+
     const counties = chipFilters.counties ?? [];
     counties.forEach((c) => {
       chips.push(
@@ -63,23 +67,32 @@ export default function FiltersBar() {
           title={`Remove ${c}`}
           onClear={() => {
             const next = counties.filter((x) => x !== c);
-            replaceFilters({
-              ...chipFilters,
-              counties: next.length ? next : undefined,
-            });
+            replaceFilters({ ...chipFilters, counties: next.length ? next : undefined });
           }}
         >
           {c}
         </ClearableChip>
       );
     });
-  
-    // Type (not clearable — toggled via dialog)
-    chips.push(
-      <Chip key="type">{enforcedType === "sale" ? "For Sale" : "To Rent"}</Chip>
-    );
-  
-    // Sources
+
+    const towns = chipFilters.towns ?? [];
+    towns.forEach((t) => {
+      chips.push(
+        <ClearableChip
+          key={`town-${t}`}
+          title={`Remove ${t}`}
+          onClear={() => {
+            const next = towns.filter((x) => x !== t);
+            replaceFilters({ ...chipFilters, towns: next.length ? next : undefined });
+          }}
+        >
+          {t}
+        </ClearableChip>
+      );
+    });
+
+    chips.push(<Chip key="type">{enforcedType === "sale" ? "For Sale" : "To Rent"}</Chip>);
+
     const sources = chipFilters.sources ?? [];
     sources.forEach((s) => {
       chips.push(
@@ -88,18 +101,14 @@ export default function FiltersBar() {
           title={`Remove source ${s}`}
           onClear={() => {
             const next = sources.filter((x) => x !== s);
-            replaceFilters({
-              ...chipFilters,
-              sources: next.length ? next : undefined,
-            });
+            replaceFilters({ ...chipFilters, sources: next.length ? next : undefined });
           }}
         >
           Source: {s}
         </ClearableChip>
       );
     });
-  
-    // Kind — ONLY show if set (don’t show “Any”)
+
     if (chipFilters.kind) {
       const label = chipFilters.kind[0].toUpperCase() + chipFilters.kind.slice(1);
       chips.push(
@@ -115,8 +124,7 @@ export default function FiltersBar() {
         </ClearableChip>
       );
     }
-  
-    // Beds
+
     const showBeds = chipFilters.bedsMin != null || chipFilters.bedsMax != null;
     if (showBeds) {
       chips.push(
@@ -126,20 +134,18 @@ export default function FiltersBar() {
         </Chip>
       );
     }
-  
-    // Price
+
     const showPrice = chipFilters.priceMin != null || chipFilters.priceMax != null;
     if (showPrice) {
       const fmt = (n?: number) => (n != null ? `€${n.toLocaleString()}` : "Any");
       chips.push(
         <Chip key="price">
-          Price{isRent ? " (pm)" : ""}:{" "}
-          {chipFilters.priceMin != null ? fmt(priceMinEff) : "Any"}–
+          Price{isRent ? " (pm)" : ""}: {chipFilters.priceMin != null ? fmt(priceMinEff) : "Any"}–
           {chipFilters.priceMax != null ? fmt(priceMaxEff) : "Any"}
         </Chip>
       );
     }
-  
+
     if (!chips.length) {
       chips.push(
         <span key="none" className="text-xs text-white/60">
@@ -147,23 +153,64 @@ export default function FiltersBar() {
         </span>
       );
     }
-  
+
     return chips;
   }, [chipFilters, replaceFilters]);
-  
+
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 text-sm text-white">
-        <div className="flex flex-wrap items-center gap-1.5">{chipNodes.map((c, i) => <span key={i}>{c}</span>)}</div>
-        <div className="ml-auto" />
-        <button type="button" onClick={handleReset} className="cursor-pointer inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-slate-100 hover:bg-white/10 transition">
-          <RotateCcw className="h-4 w-4" /> Reset
-        </button>
-        <button type="button" onClick={() => setOpen(true)} className="cursor-pointer inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-slate-100 hover:bg-white/10 transition">
-          <SlidersHorizontal className="h-4 w-4" /> Filters
-        </button>
-        <ShareButton />
+      <div className="flex items-center gap-2 text-sm text-white flex-nowrap">
+        {/* Chips lane (scrollable on mobile) */}
+        <div className="min-w-0 flex items-center gap-1.5 overflow-x-auto scrollbar-none pr-2" aria-label="Active filters">
+          {chipNodes.map((c, i) => (
+            <span key={i} className="shrink-0">
+              {c}
+            </span>
+          ))}
+        </div>
+
+        {/* Button cluster — Filters LAST so it's on the far right */}
+        <div className="ml-auto flex items-center gap-2 shrink-0">
+          <ShareButton />
+
+          <button
+            type="button"
+            onClick={handleReset}
+            className="cursor-pointer inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 hover:bg-white/10 active:scale-[0.995] touch-manipulation"
+            aria-label="Reset filters"
+          >
+            <RotateCcw className="h-4 w-4" />
+            <span className="hidden xs:inline">Reset</span>
+          </button>
+
+          {/* Filters is placed last */}
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="cursor-pointer inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 hover:bg-white/10 active:scale-[0.995] touch-manipulation"
+            aria-label="Open filters"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            <span className="hidden xs:inline">Filters</span>
+          </button>
+        </div>
       </div>
+
+      <style jsx global>{`
+        .scrollbar-none {
+          scrollbar-width: none;
+        }
+        .scrollbar-none::-webkit-scrollbar {
+          display: none;
+        }
+        @media (max-width: 480px) {
+          .touch-manipulation {
+            padding-top: 10px;
+            padding-bottom: 10px;
+          }
+        }
+      `}</style>
+
       <FiltersDialog open={open} onClose={() => setOpen(false)} />
     </>
   );

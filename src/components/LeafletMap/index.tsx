@@ -154,6 +154,8 @@ export default function LeafletMap({
           eircode: (l as any).eircode ?? null,
           img,
           sources,
+          town: (l as any).town ?? null,          // ✅ add
+          sizeSqm: (l as any).sizeSqm ?? null,    // ✅ add        
         },
       };
     });
@@ -481,7 +483,7 @@ export default function LeafletMap({
           display: inline-flex; align-items: center; justify-content: center;
           height: 28px; padding: 0 12px; border-radius: 9999px;
           border: 1px solid var(--pm-border); color: #eef2ff;
-          font-weight: 800; font-size: 12.5px; letter-spacing: .15px;
+          font-weight: 800; font-size: 13px; letter-spacing: .15px;
           background: radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.18), rgba(255,255,255,0) 60%),
                       linear-gradient(135deg, var(--pm-brand-1) 0%, var(--pm-brand-2) 100%);
           box-shadow: 0 8px 18px rgba(0,0,0,.35);

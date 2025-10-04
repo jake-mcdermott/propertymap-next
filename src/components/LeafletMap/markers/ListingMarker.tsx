@@ -14,7 +14,7 @@ type Props = {
   f: PointFeature<PtProps>;
   setMarkerRef: (id: string, ref: LeafletMarker | null) => void;
   onSelect: (id: string) => void;
-  highlighted?: boolean; // <- from map:hover in LeafletMap
+  highlighted?: boolean;
   popupMode?: "desktop" | "mobile";
 };
 
@@ -46,11 +46,28 @@ function measurePillWidth(text: string) {
   return Math.max(text === "POA" ? 32 : 36, Math.min(160, w));
 }
 
-export default function ListingMarker({ f, setMarkerRef, onSelect, highlighted = false }: Props) {
-  const id = f.properties.listingId;
-  const { lat, lng } = f.properties;
-  const { title, img, beds, baths, county, address, eircode } = f.properties;
-  const price = f.properties.price as number | null | undefined;
+export default function ListingMarker({
+  f,
+  setMarkerRef,
+  onSelect,
+  highlighted = false,
+}: Props) {
+  const {
+    listingId: id,
+    lat,
+    lng,
+    title,
+    img,
+    beds,
+    baths,
+    county,
+    address,
+    eircode,
+    town,
+    sizeSqm,
+    sources,
+    price,
+  } = f.properties;
 
   const label = useMemo(() => displayPriceCompact(price), [price]);
 
@@ -76,7 +93,6 @@ export default function ListingMarker({ f, setMarkerRef, onSelect, highlighted =
     });
   }, [label, highlighted]);
 
-  // Lift highlighted markers above others
   const zIndexOffset = highlighted ? 1000 : 0;
 
   return (
@@ -92,14 +108,16 @@ export default function ListingMarker({ f, setMarkerRef, onSelect, highlighted =
           listing={{
             id,
             title: title ?? undefined,
-            price: price && price > 0 ? price : null, // let card render POA if null
+            price: price && price > 0 ? price : null,
             address: address ?? undefined,
             county: county ?? undefined,
             beds: beds ?? undefined,
-            eircode: eircode ?? undefined,
             baths: baths ?? undefined,
+            eircode: eircode ?? undefined,
+            town: town ?? undefined,        // ✅ pass town
+            sizeSqm: sizeSqm ?? undefined,  // ✅ pass size
             images: img ? [img] : [],
-            sources: (f.properties.sources as any) || [],
+            sources: sources || [],
             lat,
             lng,
             kind: undefined,

@@ -6,7 +6,9 @@
     "dev": "next dev --turbopack",
     "build": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postbuild": "next-sitemap",
+    "sitemap": "next-sitemap"
   },
   "dependencies": {
     "@heroui/react": "^2.8.3",
@@ -23,6 +25,7 @@
     "leaflet-doubletapdragzoom": "^0.3.2",
     "lucide-react": "^0.542.0",
     "next": "15.5.2",
+    "next-sitemap": "^4.2.3",
     "overlapping-marker-spiderfier-leaflet": "^0.2.7",
     "react": "19.1.0",
     "react-dom": "19.1.0",

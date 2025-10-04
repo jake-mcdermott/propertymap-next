@@ -4,7 +4,7 @@
 import React, { useState } from "react";
 import type { Listing } from "@/lib/types";
 import { clsx } from "clsx";
-import { MapPin, BedDouble, Home, Building2 } from "lucide-react";
+import { MapPin, BedDouble, Home, Building2, Ruler } from "lucide-react"; // ⟵ added Ruler
 
 /* -------- helpers -------- */
 function kindLabel(kind?: Listing["kind"], title?: string, propertyType?: string) {
@@ -27,7 +27,7 @@ function displayPrice(price?: number | null) {
   return `€${price.toLocaleString()}`;
 }
 
-/* Address lines (requested layout) */
+/* Address lines */
 function primaryAddress(listing: Listing) {
   const a = (listing.address || "").trim();
   if (a) return a;
@@ -35,11 +35,14 @@ function primaryAddress(listing: Listing) {
   const eir = (listing as any).eircode || "";
   return [county, eir].filter(Boolean).join(" · ") || "—";
 }
-function countyEirLine(listing: Listing) {
+
+/** Town, County · Eircode when town exists */
+function locationLine(listing: Listing) {
+  const town = String((listing as any).town || "").trim();
   const county = cleanCounty(listing.county);
   const eir = (listing as any).eircode || "";
-  const txt = [county || null, eir || null].filter(Boolean).join(" · ");
-  return txt || "";
+  const left = [town || null, county || null].filter(Boolean).join(town && county ? ", " : "");
+  return [left || null, eir || null].filter(Boolean).join(" · ");
 }
 
 function bedsLabelFrom(beds?: number | null) {
@@ -48,9 +51,14 @@ function bedsLabelFrom(beds?: number | null) {
   return String(beds);
 }
 
+/** format m² */
+function formatSqm(n?: number | null) {
+  if (!Number.isFinite(n as number) || (n as number) <= 0) return null;
+  return `${Math.round(n as number)} m²`;
+}
+
 /* -------- source branding helpers -------- */
 type SourceItem = { name?: string; url: string };
-
 function brandFromHost(host: string): string {
   const h = host.replace(/^www\./, "").toLowerCase();
   if (h.includes("myhome")) return "myhome";
@@ -74,8 +82,6 @@ function prettyName(brand: string): string {
     default: return "Source";
   }
 }
-
-/** Compute the label we actually render for a source — used for sorting. */
 function sourceLabel(item: SourceItem): string {
   let host = "";
   try { host = new URL(item.url).host; } catch {}
@@ -83,34 +89,24 @@ function sourceLabel(item: SourceItem): string {
   const fallbackHost = host.replace(/^www\./, "") || "Source";
   return (item.name?.trim()) || prettyName(brand) || fallbackHost;
 }
-
-/** Build, de-duplicate, and **alphabetically sort** sources by their render label. */
 function deriveSources(listing: Listing): SourceItem[] {
   const primary = listing.url as string | undefined;
   const extra = listing.sources as Array<{ name?: string; url: string }> | undefined;
-
   const fallback: SourceItem[] = primary ? [{ name: undefined, url: primary }] : [];
   const raw = (extra && extra.length ? extra : fallback) as SourceItem[];
-
-  // De-dupe by URL (stable)
   const byUrl = new Map<string, SourceItem>();
   for (const s of raw) {
     if (!s?.url) continue;
     if (!byUrl.has(s.url)) byUrl.set(s.url, { name: s.name?.trim(), url: s.url });
   }
-
   const deduped = Array.from(byUrl.values());
-
-  // Sort by label (case-insensitive), then by URL to make ties stable
   deduped.sort((a, b) => {
     const la = sourceLabel(a).toLowerCase();
     const lb = sourceLabel(b).toLowerCase();
     if (la < lb) return -1;
     if (la > lb) return 1;
-    // tie-breaker (stable)
     return (a.url || "").localeCompare(b.url || "");
   });
-
   return deduped.slice(0, 8);
 }
 
@@ -126,7 +122,6 @@ function SourcePill({ item }: { item: SourceItem }) {
       : `/logos/generic.png`;
 
   const [src, setSrc] = useState(logoFor(brand));
-
   return (
     <a
       href={item.url}
@@ -136,7 +131,6 @@ function SourcePill({ item }: { item: SourceItem }) {
       className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] leading-none bg-white/[0.06] text-slate-100 ring-1 ring-white/10 hover:bg-white hover:text-black transition"
       title={label}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
         alt=""
@@ -178,9 +172,10 @@ export function ListingCard({
       : undefined;
 
   const kind = kindLabel(listing.kind, listing.title, propertyType);
-
   const addrPrimary = primaryAddress(listing);
-  const countyEir = countyEirLine(listing);
+  const locLine = locationLine(listing);
+  const sizeSqm = (listing as any).sizeSqm as number | null | undefined;
+  const sizeText = formatSqm(sizeSqm);
 
   const handleClick = () => {
     onClick?.();
@@ -218,7 +213,6 @@ export function ListingCard({
           {/* Photo (left) */}
           <div className="relative h-full min-h-[140px] overflow-hidden">
             {listing.images?.[0] ? (
-              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={listing.images[0]}
                 alt={addrPrimary}
@@ -248,14 +242,14 @@ export function ListingCard({
                 {addrPrimary}
               </h3>
 
-              {/* County · Eircode (second line) */}
-              {!!countyEir && (
+              {/* Location subheading */}
+              {!!locLine && (
                 <div
                   className="mt-1 flex items-center gap-1.5 text-xs text-slate-300/90 truncate"
-                  title={countyEir}
+                  title={locLine}
                 >
                   <MapPin className="h-3 w-3 shrink-0 opacity-70" />
-                  {countyEir}
+                  {locLine}
                 </div>
               )}
             </div>
@@ -273,6 +267,14 @@ export function ListingCard({
                 <KindIcon kind={listing.kind} />
                 {kind}
               </span>
+
+              {/* NEW: Size (own icon, same styling) */}
+              {sizeText && (
+                <span className="inline-flex items-center gap-1">
+                  <Ruler className="h-3.5 w-3.5 opacity-70" />
+                  {sizeText}
+                </span>
+              )}
             </div>
 
             {/* Sources with logos (sorted) */}
@@ -315,7 +317,6 @@ export function ListingCard({
       {/* Photo */}
       <div className="relative h-full min-h-[135px] overflow-hidden">
         {listing.images?.[0] ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={listing.images[0]}
             alt={addrPrimary}
@@ -343,36 +344,51 @@ export function ListingCard({
             {addrPrimary}
           </h3>
 
-          {/* County · Eircode (second line) */}
-          {countyEir && (
-            <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-400 line-clamp-1">
+          {/* Location subheading */}
+          {locLine && (
+            <div className="mt-1 flex items-center gap-1.5 text-xs text-slate-400 min-w-0">
               <MapPin className="h-3 w-3 shrink-0 opacity-70" />
-              {countyEir}
+              <span className="truncate">{locLine}</span>
             </div>
           )}
         </div>
 
-        <div className="mt-3 flex items-center gap-3 text-[12px] text-slate-300/90">
-          <span className="inline-flex items-center gap-1">
-            <BedDouble className="h-3.5 w-3.5 opacity-70" />
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-slate-300/90">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap truncate max-w-[45%] min-w-0">
+            <BedDouble className="h-3.5 w-3.5 opacity-70 shrink-0" />
             {(() => {
               const lbl = bedsLabelFrom(listing.beds);
               return lbl === "—" ? "—" : `${lbl} Bed${lbl === "1" ? "" : "s"}`;
             })()}
           </span>
 
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap truncate max-w-[45%] min-w-0">
             <KindIcon kind={listing.kind} />
             {kind}
           </span>
+
+          {!!sizeText && (
+            <span className="inline-flex items-center gap-1 whitespace-nowrap truncate max-w-[45%] min-w-0">
+              <Ruler className="h-3.5 w-3.5 opacity-70 shrink-0" />
+              {sizeText}
+            </span>
+          )}
         </div>
 
         {/* Sources with logos (sorted) */}
         {srcs.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {srcs.map((s, i) => (
-              <SourcePill key={`${listing.id}-side-${i}-${s.url}`} item={s} />
-            ))}
+          <div
+            className={clsx(
+              "mt-1 -mr-3 pr-3 overflow-x-auto",
+              "[scrollbar-width:none] [-ms-overflow-style:none]",
+              "[&::-webkit-scrollbar]:hidden"
+            )}
+          >
+            <div className="flex flex-nowrap gap-2">
+              {srcs.map((s, i) => (
+                <SourcePill key={`${listing.id}-side-${i}-${s.url}`} item={s} />
+              ))}
+            </div>
           </div>
         )}
       </div>

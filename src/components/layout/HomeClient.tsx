@@ -160,7 +160,7 @@ function HomeClientInner() {
         // ========================= Desktop ONLY =========================
         <div
           className={`
-            flex-1 min-h-0 h-full grid grid-cols-[minmax(360px,480px)_1fr] gap-0
+            flex-1 min-h-0 h-full grid grid-cols-[minmax(360px,600px)_1fr] gap-0
             transition-opacity duration-300 will-change-[opacity]
             ${contentVisible ? "opacity-100" : "opacity-0"}
           `}

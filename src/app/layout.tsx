@@ -11,8 +11,9 @@ export const metadata: Metadata = {
     "apartments to rent Ireland",
     "Irish property data",
     "PropertyMap.ie",
-    "Irish property map"
+    "Irish property map",
   ],
+  metadataBase: new URL("https://propertymap.ie"),
   openGraph: {
     title: "PropertyMap.ie | Fast Irish Property Search",
     description:
@@ -27,6 +28,17 @@ export const metadata: Metadata = {
     description:
       "Seamless map + list UI for discovering property in Ireland. Houses, apartments, and sites—faster than anywhere else.",
   },
+  icons: {
+    icon: [
+      { url: "/icon.svg", type: "image/svg", sizes: "512x512" },
+    ],
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: [ { url: "/icon.png" } ],
+  },
+  manifest: "/site.webmanifest",
+  themeColor: "#0a0a0a",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -40,11 +52,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
           crossOrigin=""
         />
-        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+        {/* No manual <link rel="icon"> needed; Next uses metadata.icons */}
+        <meta name="theme-color" content="#0a0a0a" />
+        <meta name="apple-mobile-web-app-title" content="PropertyMap.ie" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
       </head>
-      <body className="bg-neutral-950 text-slate-100">
-        {children}
-      </body>
+      <body className="bg-neutral-950 text-slate-100">{children}</body>
     </html>
   );
 }

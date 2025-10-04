@@ -1,5 +1,6 @@
 export type ListingType = "sale" | "rent";
 export type PropertyKind = "house" | "apartment";
+
 export type Filters = {
   type?: ListingType;          // sale | rent (default sale)
   kind?: PropertyKind;         // house | apartment
@@ -9,6 +10,7 @@ export type Filters = {
   bedsMax?: number;
   priceMin?: number;
   priceMax?: number;
+  towns?: string[];            // ← NEW
 
   // map/view keys (optional)
   lat?: number; lng?: number; zoom?: number;
@@ -22,7 +24,7 @@ export const IRELAND_COUNTIES = [
   "Wexford","Wicklow",
 ];
 
-export const AVAILABLE_SOURCES = ["SherryFitz","MyHome","FindQo","DNG"]; 
+export const AVAILABLE_SOURCES = ["SherryFitz","MyHome","FindQo","DNG"];
 
 export const priceDomain = (type: ListingType) => {
   const isRent = type === "rent";
@@ -60,6 +62,7 @@ export function searchParamsToFilters(sp: URLSearchParams): Filters {
     bedsMax: parseNum(sp.get("bedsMax")),
     priceMin: parseNum(sp.get("priceMin")),
     priceMax: parseNum(sp.get("priceMax")),
+    towns:  parseCSV(sp.get("towns")), // ← NEW
     lat: parseNum(sp.get("lat")),
     lng: parseNum(sp.get("lng")),
     zoom: parseNum(sp.get("zoom")),
@@ -89,6 +92,7 @@ export function filtersToSearchParams(f: Filters, base?: URLSearchParams) {
   set("kind", f.kind ?? "");
   setCSV("counties", f.counties);
   setCSV("sources", f.sources);
+  setCSV("towns",   f.towns); // ← NEW
   set("bedsMin", f.bedsMin ?? "");
   set("bedsMax", f.bedsMax ?? "");
   set("priceMin", f.priceMin ?? "");

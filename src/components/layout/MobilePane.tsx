@@ -1,4 +1,3 @@
-// src/components/MobilePane.tsx
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -21,7 +20,6 @@ type Props = {
   visibleRows: Listing[];
   loading: boolean;
 
-  /** Parent-controlled view; kept for compatibility */
   mobileView: "map" | "list";
   setMobileView: (v: "map" | "list") => void;
 
@@ -34,7 +32,6 @@ type Props = {
 
   onCloseActive?: () => void;
 
-  /** NEW: bump this to force a fresh MapContainer mount (fixes hidden-mount sizing on mobile) */
   mapMountKey?: number;
 };
 
@@ -63,9 +60,6 @@ function IconButton({
   );
 }
 
-/* =====================================================================================
-   Main component
-   ===================================================================================== */
 export default function MobilePane({
   listings,
   active,
@@ -88,11 +82,10 @@ export default function MobilePane({
   const [copied, setCopied] = useState(false);
   const { filters, replaceFilters } = useUrlFilters();
 
-  /** Sheet control for same-point clusters */
+  // === Cluster override state ===
   const [clusterOverrideIds, setClusterOverrideIds] = useState<string[] | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [sheetKey, setSheetKey] = useState(0); // forces remount to re-open same ids repeatedly
-  const openGuardRef = useRef(false); // prevents instant close during open animation
+  const [sheetKey, setSheetKey] = useState(0); // bump to remount sheet (fresh measure/animation)
 
   const handleCopy = async () => {
     const url = window.location.href;
@@ -101,7 +94,6 @@ export default function MobilePane({
       setCopied(true);
       setTimeout(() => setCopied(false), 900);
     } catch {
-      // fallback
       window.prompt("Copy this URL:", url);
     }
   };
@@ -112,26 +104,7 @@ export default function MobilePane({
     replaceFilters(cleared, { resetViewportOnTypeChange: true });
   };
 
-  /** Open the list sheet for provided ids */
-  const openClusterSheet = (ids: string[]) => {
-    setClusterOverrideIds([...ids]); // clone to ensure state change even if same contents
-    setSheetOpen(true);
-    setSheetKey((k) => k + 1); // remount for clean animation & reopen same cluster
-
-    openGuardRef.current = true;
-    setTimeout(() => {
-      openGuardRef.current = false;
-    }, 320); // ~ keep in sync with panel transition
-  };
-
-  /** Close requested by the sheet (drag down to peek) */
-  const handleSheetClose = () => {
-    if (openGuardRef.current) return;
-    setSheetOpen(false);
-    // keep clusterOverrideIds set so a second tap on the same cluster opens immediately
-  };
-
-  // Listen for cluster picks (LeafletMap dispatches { openSheet: true } for “same point”)
+  // Listen for same-point cluster picks (PropertyMap dispatches map:cluster-pick with openSheet=true)
   useEffect(() => {
     const onPick = (e: Event) => {
       const { ids, openSheet } = (e as CustomEvent).detail as {
@@ -145,13 +118,14 @@ export default function MobilePane({
       setMobileView("map");
 
       if (openSheet) {
-        onCloseActive?.(); // ensure single-listing drawer is closed
-        openClusterSheet(ids);
+        setClusterOverrideIds(ids.slice());
+        setSheetOpen(true);
+        setSheetKey((k) => k + 1);
+        onCloseActive?.();
         requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         return;
       }
 
-      // Default: pick first item → single drawer
       onSelect(ids[0]);
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     };
@@ -160,24 +134,25 @@ export default function MobilePane({
     return () => window.removeEventListener("map:cluster-pick", onPick as EventListener);
   }, [onSelect, setMobileView, onCloseActive]);
 
-  // Pagination
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(24);
-
-  // If showing a tiny cluster list, make sure it fits one page
-  useEffect(() => {
-    if (clusterOverrideIds?.length) {
-      setPageSize(Math.max(24, clusterOverrideIds.length));
-      setPage(1);
-    }
-  }, [clusterOverrideIds]);
-
-  // Compute the sheet rows: cluster override (when set) or visible viewport rows
+  // Derived rows for the sheet
   const sheetRows = useMemo(() => {
     if (!clusterOverrideIds?.length) return visibleRows;
     const keep = new Set(clusterOverrideIds);
     return visibleRows.filter((r) => keep.has(r.id));
   }, [visibleRows, clusterOverrideIds]);
+
+  // === Pagination ===
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(24);
+
+  useEffect(() => {
+    if (clusterOverrideIds?.length) {
+      setPageSize(Math.max(24, clusterOverrideIds.length));
+      setPage(1);
+    } else {
+      setPageSize((s) => Math.max(24, s));
+    }
+  }, [clusterOverrideIds]);
 
   useEffect(() => {
     const totalPages = Math.max(1, Math.ceil(sheetRows.length / pageSize));
@@ -187,7 +162,7 @@ export default function MobilePane({
 
   useEffect(() => {
     setPage(1);
-  }, [filters]);
+  }, [filters, clusterOverrideIds]);
 
   const { pageSlice, totalPages } = useMemo(() => {
     const total = Math.max(1, Math.ceil(sheetRows.length / pageSize));
@@ -201,30 +176,24 @@ export default function MobilePane({
 
   const mapAreaRef = useRef<HTMLDivElement>(null);
 
-  // When the map area first mounts or becomes visible, nudge a resize for Leaflet sizing
   useEffect(() => {
     if (!mapAreaRef.current) return;
     const id = requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
     return () => cancelAnimationFrame(id);
   }, []);
 
+  const handleSheetClose = () => {
+    setSheetOpen(false);
+    setClusterOverrideIds(null);
+    requestAnimationFrame(() => window.dispatchEvent(new Event("map:requery-visible")));
+  };
+
   return (
-    // md:hidden: this whole pane is mobile-only
     <section className="md:hidden flex-1 min-h-0 flex flex-col">
       {/* Header */}
       <div className={`${SURFACE} ${HAIRLINE} shrink-0`}>
         <div className="px-3 py-2 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setFiltersOpen(true)}
-            className="cursor-pointer inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-slate-200 bg-white/[0.05] ring-1 ring-white/10 hover:bg-white/[0.08] transition"
-            aria-haspopup="dialog"
-            aria-expanded={filtersOpen}
-          >
-            <SlidersHorizontal className="h-4 w-4 opacity-90" aria-hidden />
-            Filters
-          </button>
-
+          {/* Left side intentionally empty so cluster below sits on the right */}
           <div className="ml-auto flex items-center gap-2">
             <IconButton title={copied ? "Copied!" : "Copy link"} ariaLabel="Copy link" onClick={handleCopy}>
               {copied ? <Check className="h-4 w-4" /> : <LinkIcon className="h-4 w-4" />}
@@ -232,13 +201,24 @@ export default function MobilePane({
             <IconButton title="Reset filters" ariaLabel="Reset filters" onClick={handleReset}>
               <RotateCcw className="h-4 w-4" />
             </IconButton>
+
+            {/* Filters LAST so it's at the far right for thumb reach */}
+            <button
+              type="button"
+              onClick={() => setFiltersOpen(true)}
+              className="cursor-pointer border border-white/15 inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-slate-200 bg-white/[0.08] ring-1 ring-white/10 hover:bg-white/[0.12] active:scale-[0.99] transition"
+              aria-haspopup="dialog"
+              aria-expanded={filtersOpen}
+            >
+              <SlidersHorizontal className="h-4 w-4 opacity-90" aria-hidden />
+              Filters
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Map area (sheet lives inside this container) */}
+      {/* Map + sheet */}
       <div ref={mapAreaRef} className="flex-1 min-h-0 relative h-full">
-        {/* Map fills the container */}
         <div className={`${SURFACE_SOFT} absolute inset-0 h-full w-full`}>
           <PropertyMap
             key={mapMountKey}
@@ -251,7 +231,6 @@ export default function MobilePane({
           />
         </div>
 
-        {/* Bottom draggable list sheet overlays the map */}
         <BottomListSheet
           key={sheetKey}
           containerRef={mapAreaRef as React.RefObject<HTMLDivElement>}
@@ -264,28 +243,26 @@ export default function MobilePane({
           setPage={setPage}
           pageSize={pageSize}
           setPageSize={setPageSize}
-          open={!!clusterOverrideIds && sheetOpen} // controlled only in cluster mode
-          onClose={handleSheetClose}
+          open={clusterOverrideIds ? sheetOpen : undefined}
+          onClose={clusterOverrideIds ? handleSheetClose : undefined}
         />
       </div>
 
-      {/* Filters dialog */}
+      {/* Filters */}
       <FiltersDialog
         open={filtersOpen}
         onClose={() => {
           setFiltersOpen(false);
-          // After closing filters (which may have hidden/reflowed the map), nudge a resize
           requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         }}
       />
 
-      {/* Mobile drawer for active listing */}
+      {/* Single listing drawer */}
       <MobileListingDrawer
         open={!!active}
         listing={active}
         onClose={() => {
           onCloseActive?.();
-          // Drawer closing can change available height; nudge resize
           requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         }}
       />

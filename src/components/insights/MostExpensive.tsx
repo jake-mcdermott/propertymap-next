@@ -86,7 +86,7 @@ export default function MostExpensive({
 }: {
   counties: string[];
   type: ListingType;
-  liveRows: Row[];      // <-- pass from InsightsClient
+  liveRows: Row[]; // <-- pass from InsightsClient
   limit?: number;
 }) {
   const [rows, setRows] = React.useState<Row[]>([]);
@@ -186,9 +186,14 @@ export default function MostExpensive({
           <button
             type="button"
             onClick={() => setMx((v) => v + 10)}
-            className="inline-flex items-center gap-2 rounded-md border border-neutral-700 bg-neutral-800 px-3 py-2 text-sm font-medium text-neutral-200 hover:bg-neutral-700"
+            className="inline-flex items-center gap-2 rounded-md border border-neutral-700 bg-neutral-850 px-3 py-1.5 text-xs font-medium text-neutral-200 hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-neutral-600"
           >
-            See {Math.min(10, rows.length - mx)} more
+            {/* text matches main page pattern */}
+            See {Math.min(10, rows.length - mx).toLocaleString("en-IE")} more
+            {/* same tiny chevron */}
+            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor" className="transition-transform">
+              <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.06l3.71-2.83a.75.75 0 11.92 1.18l-4.17 3.18a.75.75 0 01-.92 0L5.21 8.41a.75.75 0 01.02-1.2z" />
+            </svg>
           </button>
         </div>
       )}

@@ -196,6 +196,16 @@ function Pager({
   );
 }
 
+function RotatingEmoji() {
+  const icons = ["❤️", "💪", "🧙", "✨", "🔥", "🦧", "🤠"];
+  const [i, setI] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setI((n) => (n + 1) % icons.length), 7000);
+    return () => clearInterval(id);
+  }, []);
+  return <span aria-hidden className="inline-block w-4 text-center align-[-0.1em]">{icons[i]}</span>;
+}
+
 /* ---------- NEW: sort helpers ---------- */
 type SortMode = "relevance" | "priceAsc" | "priceDesc";
 
@@ -308,8 +318,6 @@ export default function Sidebar({
     <aside className={`${SURFACE} h-full min-h-0 flex flex-col text-white`}>
       {/* Header */}
       <div className="h-11 flex items-center justify-between px-3 shrink-0">
-        <div className="text-sm font-medium">Listings</div>
-
         {/* sort control */}
         <div className="flex items-center gap-2">
           <label htmlFor="sort" className="text-xs">Sort</label>
@@ -338,9 +346,6 @@ export default function Sidebar({
           ) : (
             <span className="tabular-nums">
               {sortedRows.length.toLocaleString()} total
-              {sortedRows.length > 0 && (
-                <span>{" "}| Page {page}/{totalPages}</span>
-              )}
             </span>
           )}
         </div>
@@ -411,14 +416,23 @@ export default function Sidebar({
       )}
 
       {/* Footer */}
-      <footer className="shrink-0 px-3 py-2">
-        <div className="text-[11px] flex items-center justify-between">
-          <span>© {new Date().getFullYear()} PropertyMap.ie</span>
-          <nav className="flex items-center gap-3">
-            <a className="hover:opacity-90" href="/contact">
-              Contact
-            </a>
-          </nav>
+      <footer className="shrink-0">
+        {/* small breathing space above the divider */}
+        <div className="h-3" aria-hidden />
+
+        <div
+          className="
+            px-3 pt-2 pb-3
+            border-t border-white/10
+            bg-transparent
+          "
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
+          <div className="text-[11px] text-white/55 flex items-center justify-between">
+            <p>
+              Made with <RotatingEmoji /> in Ireland 🇮🇪 • © 2025 PropertyMap.ie
+            </p>
+          </div>
         </div>
       </footer>
     </aside>

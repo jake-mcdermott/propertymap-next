@@ -1,0 +1,9 @@
+# *
+User-agent: *
+Allow: /
+
+# Host
+Host: https://www.propertymap.ie
+
+# Sitemaps
+Sitemap: https://www.propertymap.ie/sitemap.xml

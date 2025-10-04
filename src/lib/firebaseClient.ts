@@ -1,6 +1,12 @@
 // src/lib/firebaseClient.ts
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  initializeFirestore,
+  // getFirestore, // <- not used; we use initializeFirestore with options
+  connectFirestoreEmulator,
+  setLogLevel,
+  type Firestore,
+} from "firebase/firestore";
 import { dlog } from "./debug";
 
 const cfg = {
@@ -13,6 +19,21 @@ const cfg = {
   // measurementId is optional
   measurementId: process.env.NEXT_PUBLIC_FB_MEASUREMENT_ID,
 };
+
+// Optional behavior via env (all optional)
+const FORCE_LONG_POLL = process.env.NEXT_PUBLIC_FB_FORCE_LONG_POLL === "1";
+const AUTO_DETECT_LONG_POLL =
+  process.env.NEXT_PUBLIC_FB_AUTO_DETECT_LONG_POLL !== "0"; // default: true
+const DISABLE_FETCH_STREAMS =
+  process.env.NEXT_PUBLIC_FB_DISABLE_FETCH_STREAMS !== "0"; // default: true
+const LOG_LEVEL = (process.env.NEXT_PUBLIC_FB_LOG_LEVEL || "error") as
+  | "debug"
+  | "error"
+  | "silent";
+
+const USE_EMULATOR = process.env.NEXT_PUBLIC_FB_EMULATOR === "1";
+const EMU_HOST = process.env.NEXT_PUBLIC_FB_EMULATOR_HOST || "127.0.0.1";
+const EMU_PORT = Number(process.env.NEXT_PUBLIC_FB_EMULATOR_PORT || "8080");
 
 function assertConfig(obj: Record<string, string | undefined>) {
   const missing = Object.entries(obj)
@@ -43,8 +64,35 @@ dlog("firebase", "Initializing app", {
   storageBucket: cfg.storageBucket,
 });
 
+// Single app instance
 export const app: FirebaseApp = getApps()[0] ?? initializeApp(cfg);
-export const db: Firestore = getFirestore(app);
+
+// --- Firestore (with stable transports) ---------------------------------
+// These options reduce flaky Listen/channel errors on some networks/ad-blockers.
+const fsOptions = {
+  experimentalAutoDetectLongPolling: AUTO_DETECT_LONG_POLL, // usually true
+  experimentalForceLongPolling: FORCE_LONG_POLL,           // opt-in via env
+  useFetchStreams: !DISABLE_FETCH_STREAMS ? true : false,  // default false
+};
+
+export const db: Firestore = initializeFirestore(app, fsOptions);
+dlog("firebase", "Firestore initialized", fsOptions);
+
+// Optional: connect emulator (dev only)
+if (typeof window !== "undefined" && USE_EMULATOR) {
+  try {
+    connectFirestoreEmulator(db, EMU_HOST, EMU_PORT);
+    dlog("firebase", `Firestore emulator connected at http://${EMU_HOST}:${EMU_PORT}`);
+  } catch (e) {
+    dlog("firebase", "Firestore emulator connect failed", e);
+  }
+}
+
+// Tone down SDK noise (still shows real errors)
+try {
+  setLogLevel(LOG_LEVEL);
+  dlog("firebase", "Firestore log level", LOG_LEVEL);
+} catch { /* noop */ }
 
 // Optional: lazily init Analytics in the browser if provided
 if (typeof window !== "undefined" && cfg.measurementId) {

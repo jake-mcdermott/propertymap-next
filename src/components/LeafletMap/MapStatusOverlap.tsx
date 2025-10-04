@@ -35,22 +35,25 @@ export default function MapStatusOverlay() {
         if (alive) setLoading(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
 
   const rel = useMemo(
     () => (info?.updatedAt ? formatRelative(new Date(info.updatedAt)) : null),
     [info?.updatedAt]
   );
-  const abs = info?.updatedAt
-    ? new Date(info.updatedAt).toLocaleString()
-    : undefined;
+  const abs = info?.updatedAt ? new Date(info.updatedAt).toLocaleString() : undefined;
+
+  // Shared container classes:
+  // - Mobile: top-right (avoid bottom sheet)
+  // - md+: bottom-left (original spot)
+  const containerCls =
+    "pointer-events-none absolute right-2 top-2 md:left-3 md:top-auto md:bottom-3 z-[1000] " +
+    "md:z-[1000]"; // stays above bottom sheet (z-20) & tiles
 
   if (loading && !info) {
     return (
-      <div className="pointer-events-none absolute left-2 bottom-2 sm:left-3 sm:bottom-3 z-[400]">
+      <div className={containerCls} style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
         <span className="inline-flex h-6 min-w-[124px] items-center rounded-md bg-black/70">
           <span className="mx-2 h-3 w-3 rounded-full bg-white/30 animate-pulse" />
           <span className="h-3 w-24 rounded bg-white/20 animate-pulse" />
@@ -62,7 +65,7 @@ export default function MapStatusOverlay() {
   if (!rel) return null;
 
   return (
-    <div className="pointer-events-none absolute left-2 bottom-2 sm:left-3 sm:bottom-3 z-[400]">
+    <div className={containerCls} style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
       <span
         className="pointer-events-auto inline-flex items-center gap-1.5 rounded-md bg-black/75 px-2.5 py-1 text-[12px] text-white shadow-md ring-1 ring-black/50"
         title={abs ? `Updated ${abs}` : undefined}
