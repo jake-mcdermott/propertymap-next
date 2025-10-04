@@ -19,21 +19,21 @@ interface BarChartGraphProps {
 
 export default function BarChartGraph({yearlyAmortization} : BarChartGraphProps) {
     return (
-<div className="bg-neutral-900 shadow-md md:rounded-sm rounded-none p-4">
+    <div className="bg-neutral-800/20 shadow-md md:rounded-lg rounded-none p-4">
         <h2 className="text-xl font-semibold mb-4">
           Yearly Principal vs Interest + Cumulative Total
         </h2>
-        <div className="h-80">
+        <div className="h-100 p-4">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={yearlyAmortization}>
               {/* X-Axis */}
-              <XAxis dataKey="year" />
+              <XAxis dataKey="year" stroke="#aaaaaa" />
 
               {/* Left Axis for yearly amounts */}
               <YAxis
                 yAxisId="left"
                 orientation="left"
-                stroke="#374151"
+                stroke="#aaaaaa"
                 tickFormatter={(value) =>
                   value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value
                 }

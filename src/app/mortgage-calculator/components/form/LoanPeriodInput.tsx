@@ -12,7 +12,7 @@ export default function LoanPeriodInput({ form, setForm, type, label }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="w-1/4 text-sm mt-4">{label}</label>
+      <label className="w-1/4 text-lg mt-4">{label}</label>
       <div>
         <input
           type="number"
@@ -30,7 +30,7 @@ export default function LoanPeriodInput({ form, setForm, type, label }: Props) {
         <span className="text-gray-400 text-md pl-2">Years</span>
       </div>
 
-      <label className="w-1/4 text-sm mt-4">Interest Rate</label>
+      <label className="w-1/4 text-lg mt-4">Interest Rate</label>
       <div>
         <input
           type="number"

@@ -86,14 +86,14 @@ export default function AmortizationTable({
   };
 
   return (
-    <div className="bg-neutral-900 shadow-md p-6 md:rounded-sm rounded-none">
+    <div className="bg-neutral-800/20 shadow-md p-6 md:rounded-lg rounded-none">
       {/* Toggle + Download */}
       <div className="flex justify-between items-center mb-4">
         <div className="inline-flex rounded-md border border-gray-600 overflow-hidden">
           <button
-            className={`px-4 py-2 text-sm ${
+            className={`px-4 py-2 text-sm hover:cursor-pointer ${
               selectedCadence === "monthly"
-                ? "bg-blue-600 text-white"
+                ? "bg-white text-black"
                 : "bg-neutral-800 text-gray-300"
             }`}
             onClick={() => setSelectedCadence("monthly")}
@@ -101,9 +101,9 @@ export default function AmortizationTable({
             Month View
           </button>
           <button
-            className={`px-4 py-2 text-sm ${
+            className={`px-4 py-2 text-sm hover:cursor-pointer ${
               selectedCadence === "yearly"
-                ? "bg-blue-600 text-white"
+                ? "bg-white text-black"
                 : "bg-neutral-800 text-gray-300"
             }`}
             onClick={() => setSelectedCadence("yearly")}
@@ -113,7 +113,7 @@ export default function AmortizationTable({
         </div>
         <button
           onClick={downloadCSV}
-          className="px-3 py-2 text-sm rounded-md bg-green-600 hover:bg-green-700 text-white"
+          className="px-3 py-2 text-sm rounded-md bg-green-600 hover:bg-green-700 text-white hover:cursor-pointer"
         >
           Download CSV
         </button>
