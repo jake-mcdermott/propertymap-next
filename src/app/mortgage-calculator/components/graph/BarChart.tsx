@@ -19,11 +19,11 @@ interface BarChartGraphProps {
 
 export default function BarChartGraph({yearlyAmortization} : BarChartGraphProps) {
     return (
-    <div className="bg-neutral-800/20 shadow-md md:rounded-lg rounded-none p-4">
-        <h2 className="text-xl font-semibold mb-4">
+    <div className="bg-neutral-800/20 shadow-md md:rounded-lg rounded-none">
+        <h2 className="text-xl font-semibold mb-4 pl-4 pr-4">
           Yearly Principal vs Interest + Cumulative Total
         </h2>
-        <div className="h-100 p-4">
+        <div className="h-100">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={yearlyAmortization}>
               {/* X-Axis */}
