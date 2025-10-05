@@ -1,3 +1,4 @@
+// src/components/layout/FiltersBar.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -15,6 +16,7 @@ function Chip({ children }: { children: React.ReactNode }) {
     </span>
   );
 }
+
 function ClearableChip({
   children,
   onClear,
@@ -54,11 +56,20 @@ export default function FiltersBar() {
   };
 
   const chipNodes = useMemo(() => {
-    const { enforcedType, isRent, bedsMinEff, bedsMaxEff, priceMinEff, priceMaxEff } =
-      deriveEffective(chipFilters);
+    const {
+      enforcedType,
+      isRent,
+      bedsMinEff,
+      bedsMaxEff,
+      priceMinEff,
+      priceMaxEff,
+      sqmMinEff,
+      sqmMaxEff,
+    } = deriveEffective(chipFilters);
 
     const chips: React.ReactNode[] = [];
 
+    // Counties
     const counties = chipFilters.counties ?? [];
     counties.forEach((c) => {
       chips.push(
@@ -75,6 +86,7 @@ export default function FiltersBar() {
       );
     });
 
+    // Towns
     const towns = chipFilters.towns ?? [];
     towns.forEach((t) => {
       chips.push(
@@ -91,8 +103,12 @@ export default function FiltersBar() {
       );
     });
 
-    chips.push(<Chip key="type">{enforcedType === "sale" ? "For Sale" : "To Rent"}</Chip>);
+    // Type
+    chips.push(
+      <Chip key="type">{enforcedType === "sale" ? "For Sale" : "To Rent"}</Chip>
+    );
 
+    // Sources
     const sources = chipFilters.sources ?? [];
     sources.forEach((s) => {
       chips.push(
@@ -109,6 +125,7 @@ export default function FiltersBar() {
       );
     });
 
+    // Kind
     if (chipFilters.kind) {
       const label = chipFilters.kind[0].toUpperCase() + chipFilters.kind.slice(1);
       chips.push(
@@ -125,6 +142,7 @@ export default function FiltersBar() {
       );
     }
 
+    // Beds
     const showBeds = chipFilters.bedsMin != null || chipFilters.bedsMax != null;
     if (showBeds) {
       chips.push(
@@ -135,13 +153,27 @@ export default function FiltersBar() {
       );
     }
 
+    // Price
     const showPrice = chipFilters.priceMin != null || chipFilters.priceMax != null;
     if (showPrice) {
       const fmt = (n?: number) => (n != null ? `€${n.toLocaleString()}` : "Any");
       chips.push(
         <Chip key="price">
-          Price{isRent ? " (pm)" : ""}: {chipFilters.priceMin != null ? fmt(priceMinEff) : "Any"}–
+          Price{isRent ? " (pm)" : ""}:{" "}
+          {chipFilters.priceMin != null ? fmt(priceMinEff) : "Any"}–
           {chipFilters.priceMax != null ? fmt(priceMaxEff) : "Any"}
+        </Chip>
+      );
+    }
+
+    // Size (m²)
+    const showSqm = chipFilters.sqmMin != null || chipFilters.sqmMax != null;
+    if (showSqm) {
+      const fmt = (n?: number) => (n != null ? `${n} m²` : "Any");
+      chips.push(
+        <Chip key="sqm">
+          Size: {chipFilters.sqmMin != null ? fmt(sqmMinEff) : "Any"}–
+          {chipFilters.sqmMax != null ? fmt(sqmMaxEff) : "Any"}
         </Chip>
       );
     }
@@ -161,7 +193,10 @@ export default function FiltersBar() {
     <>
       <div className="flex items-center gap-2 text-sm text-white flex-nowrap">
         {/* Chips lane (scrollable on mobile) */}
-        <div className="min-w-0 flex items-center gap-1.5 overflow-x-auto scrollbar-none pr-2" aria-label="Active filters">
+        <div
+          className="min-w-0 flex items-center gap-1.5 overflow-x-auto scrollbar-none pr-2"
+          aria-label="Active filters"
+        >
           {chipNodes.map((c, i) => (
             <span key={i} className="shrink-0">
               {c}
@@ -169,7 +204,7 @@ export default function FiltersBar() {
           ))}
         </div>
 
-        {/* Button cluster — Filters LAST so it's on the far right */}
+        {/* Buttons */}
         <div className="ml-auto flex items-center gap-2 shrink-0">
           <ShareButton />
 
@@ -183,7 +218,6 @@ export default function FiltersBar() {
             <span className="hidden xs:inline">Reset</span>
           </button>
 
-          {/* Filters is placed last */}
           <button
             type="button"
             onClick={() => setOpen(true)}

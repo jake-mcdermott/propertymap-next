@@ -10,7 +10,9 @@ export type Filters = {
   bedsMax?: number;
   priceMin?: number;
   priceMax?: number;
-  towns?: string[];            // ← NEW
+  towns?: string[];
+  sqmMin?: number;
+  sqmMax?: number;
 
   // map/view keys (optional)
   lat?: number; lng?: number; zoom?: number;
@@ -24,7 +26,9 @@ export const IRELAND_COUNTIES = [
   "Wexford","Wicklow",
 ];
 
-export const AVAILABLE_SOURCES = ["SherryFitz","MyHome","FindQo","DNG"];
+export const SQM_DOMAIN = { min: 0, max: 400, step: 5 };
+
+export const AVAILABLE_SOURCES = ["SherryFitz","MyHome","FindQo","DNG","West Cork Property","Michelle Burke"];
 
 export const priceDomain = (type: ListingType) => {
   const isRent = type === "rent";
@@ -49,7 +53,6 @@ const parseCSV = (v: string | null): string[] | undefined => {
 
 export function searchParamsToFilters(sp: URLSearchParams): Filters {
   const type = sp.get("type") === "rent" ? "rent" : "sale";
-
   return {
     type,
     kind: ((): PropertyKind | undefined => {
@@ -62,7 +65,11 @@ export function searchParamsToFilters(sp: URLSearchParams): Filters {
     bedsMax: parseNum(sp.get("bedsMax")),
     priceMin: parseNum(sp.get("priceMin")),
     priceMax: parseNum(sp.get("priceMax")),
-    towns:  parseCSV(sp.get("towns")), // ← NEW
+    towns:  parseCSV(sp.get("towns")),
+    // ✅ ADD THESE TWO:
+    sqmMin: parseNum(sp.get("sqmMin")),
+    sqmMax: parseNum(sp.get("sqmMax")),
+
     lat: parseNum(sp.get("lat")),
     lng: parseNum(sp.get("lng")),
     zoom: parseNum(sp.get("zoom")),
@@ -92,11 +99,15 @@ export function filtersToSearchParams(f: Filters, base?: URLSearchParams) {
   set("kind", f.kind ?? "");
   setCSV("counties", f.counties);
   setCSV("sources", f.sources);
-  setCSV("towns",   f.towns); // ← NEW
+  setCSV("towns",   f.towns);
   set("bedsMin", f.bedsMin ?? "");
   set("bedsMax", f.bedsMax ?? "");
   set("priceMin", f.priceMin ?? "");
   set("priceMax", f.priceMax ?? "");
+  // ✅ ADD THESE TWO:
+  set("sqmMin", f.sqmMin ?? "");
+  set("sqmMax", f.sqmMax ?? "");
+
   set("lat", f.lat ?? "");
   set("lng", f.lng ?? "");
   set("zoom", f.zoom ?? "");
@@ -116,5 +127,8 @@ export function deriveEffective(f: Filters) {
   const priceMinEff = Math.max(dom.min, Math.min(dom.max, f.priceMin ?? dom.min));
   const priceMaxEff = Math.max(dom.min, Math.min(dom.max, f.priceMax ?? dom.max));
 
-  return { enforcedType, isRent, bedsMinEff, bedsMaxEff, priceMinEff, priceMaxEff, dom };
+  const sqmMinEff = Math.max(SQM_DOMAIN.min, Math.min(SQM_DOMAIN.max, f.sqmMin ?? SQM_DOMAIN.min));
+  const sqmMaxEff = Math.max(SQM_DOMAIN.min, Math.min(SQM_DOMAIN.max, f.sqmMax ?? SQM_DOMAIN.max));
+
+  return { enforcedType, isRent, bedsMinEff, bedsMaxEff, priceMinEff, priceMaxEff, sqmMinEff, sqmMaxEff, dom };
 }

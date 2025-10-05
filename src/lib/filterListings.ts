@@ -1,3 +1,4 @@
+// src/lib/filterListings.ts
 import type { Filters } from "./filters";
 import type { Listing } from "@/lib/types";
 
@@ -9,20 +10,22 @@ function hostToSourceName(host?: string | null): string | null {
   if (h.includes("dng")) return "DNG";
   if (h.includes("findqo")) return "FindQo";
   if (h.includes("myhome")) return "MyHome";
+  if (h.includes("westcorkproperty")) return "West Cork Property";
+  if (h.includes("michelleburke")) return "Michelle Burke";
+  if (h.includes("zoopla")) return "Zoopla";
   return null;
 }
 
-// put near the top of the file, shared helpers
+// shared helpers
 const norm = (s?: string | null) => (s ?? "").normalize("NFKD").toLowerCase();
 const tokenize = (s?: string | null) =>
   norm(s).replace(/['’]/g, "").split(/[^a-z]+/).filter(Boolean);
 
-/** exact token/phrase match (handles multi-word towns like "Carrick-on-Suir") */
+/** exact token/phrase match (handles multi-word towns) */
 function addressContainsName(addr?: string | null, name?: string | null): boolean {
   const A = tokenize(addr);
   const N = tokenize(name);
   if (!A.length || !N.length) return false;
-  // sliding window exact sequence match
   for (let i = 0; i <= A.length - N.length; i++) {
     let ok = true;
     for (let j = 0; j < N.length; j++) {
@@ -31,6 +34,46 @@ function addressContainsName(addr?: string | null, name?: string | null): boolea
     if (ok) return true;
   }
   return false;
+}
+
+// Convert various size fields to a single number in m²
+function extractSizeSqm(anyL: any): number | undefined {
+  const direct =
+    typeof anyL.sizeSqm === "number" ? anyL.sizeSqm :
+    typeof anyL.sqm === "number" ? anyL.sqm :
+    typeof anyL.floorAreaSqm === "number" ? anyL.floorAreaSqm :
+    undefined;
+  if (Number.isFinite(direct)) return direct as number;
+
+  // Common string fields
+  const s: string | undefined =
+    typeof anyL.sizeSqm === "string" ? anyL.sizeSqm :
+    typeof anyL.sqm === "string" ? anyL.sqm :
+    typeof anyL.floorArea === "string" ? anyL.floorArea :
+    typeof anyL.size === "string" ? anyL.size :
+    undefined;
+  if (!s) return undefined;
+
+  const txt = String(s).toLowerCase();
+
+  // Find all numbers (including ranges). Keep the largest (usually total).
+  const nums = (txt.match(/[\d,.]+/g) || [])
+    .map(t => Number(t.replace(/,/g, "")))
+    .filter(n => Number.isFinite(n)) as number[];
+  if (!nums.length) return undefined;
+  const n = Math.max(...nums);
+
+  // Unit heuristics
+  // If mentions ft or sq ft/sqft/ft² -> convert to m²
+  const isSqft = /\b(ft|sq\s?ft|ft²|sqft)\b/.test(txt);
+  const isSqm  = /\b(m2|m²|\bsqm\b)\b/.test(txt);
+
+  if (isSqft) return n / 10.7639;           // ft² → m²
+  if (isSqm)  return n;                      // already m²
+
+  // If unit unknown: guess. If value is big (e.g. > 300) it's likely ft²
+  if (n > 300) return n / 10.7639;          // heuristic
+  return n;                                  // otherwise assume m²
 }
 
 export function filterListings(all: Listing[], f: Filters): Listing[] {
@@ -83,7 +126,7 @@ export function filterListings(all: Listing[], f: Filters): Listing[] {
       const townHit =
         (town && wantTowns.includes(town)) ||
         (!town && addr && wantTowns.some((t) => addressContainsName(addr, t)));
-    
+
       if (!(countyHit || townHit)) return false; // OR semantics
     }
 
@@ -129,6 +172,11 @@ export function filterListings(all: Listing[], f: Filters): Listing[] {
     if (f.priceMin != null && (price ?? 0) < f.priceMin) return false;
     if (f.priceMax != null && (price ?? 9e99) > f.priceMax) return false;
 
+    // ✅ NEW — SIZE (m²). Your listings use sizeSqm (number)
+    const sizeSqm = extractSizeSqm(anyL);
+    if (f.sqmMin != null && (sizeSqm ?? 0) < f.sqmMin) return false;
+    if (f.sqmMax != null && (sizeSqm ?? 9e9) > f.sqmMax) return false;
+    
     return true;
   });
 }

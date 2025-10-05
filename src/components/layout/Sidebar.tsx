@@ -417,24 +417,19 @@ export default function Sidebar({
 
       {/* Footer */}
       <footer className="shrink-0">
-        {/* small breathing space above the divider */}
-        <div className="h-3" aria-hidden />
-
-        <div
-          className="
-            px-3 pt-2 pb-3
-            border-t border-white/10
-            bg-transparent
-          "
-          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-        >
-          <div className="text-[11px] text-white/55 flex items-center justify-between">
-            <p>
-              Made with <RotatingEmoji /> in Ireland 🇮🇪 • © 2025 PropertyMap.ie
-            </p>
-          </div>
-        </div>
-      </footer>
+  <div className="px-3 py-2 bg-transparent">
+    <div className="text-[11px] text-white/55 flex items-center justify-between leading-none gap-3 flex-wrap">
+      {/* left */}
+      <p className="flex items-center gap-1">
+        Made with <RotatingEmoji /> in Ireland 🇮🇪
+      </p>
+      {/* right */}
+      <p className="ml-auto">© 2025 PropertyMap.ie</p>
+    </div>
+  </div>
+  {/* minimal safe-area breathing room on iOS */}
+  <div className="h-[env(safe-area-inset-bottom,0px)]" aria-hidden />
+</footer>
     </aside>
   );
 }

@@ -1,3 +1,4 @@
+// src/components/layout/FiltersDialog.tsx
 "use client";
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -9,18 +10,12 @@ import {
   searchParamsToFilters,
   IRELAND_COUNTIES,
   AVAILABLE_SOURCES,
+  SQM_DOMAIN,
 } from "@/lib/filters";
 import { TOWNS_BY_COUNTY } from "@/data/townsByCounty";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
 import { HeroUIProvider, Slider } from "@heroui/react";
-import {
-  Home,
-  KeyRound,
-  Building2,
-  X as XIcon,
-  Search,
-  Info,
-} from "lucide-react";
+import { Home, Building2, X as XIcon, Search, Info } from "lucide-react";
 
 const clamp = (n: number, min: number, max: number) =>
   Math.max(min, Math.min(max, n));
@@ -50,7 +45,7 @@ export default function FiltersDialog({
   const { replaceFilters } = useUrlFilters();
 
   // local draft state
-  const [draftType, setDraftType] = useState<ListingType>("sale");
+  const [draftType, setDraftType] = useState<ListingType>("sale"); // kept for price domain
   const [draftKind, setDraftKind] = useState<PropertyKind | undefined>(undefined);
 
   // Selected filters
@@ -59,6 +54,10 @@ export default function FiltersDialog({
   const [sources, setSources] = useState<string[]>([]);
   const [bedsRange, setBedsRange] = useState<[number, number]>([0, 6]);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 1_500_000]);
+  const [sqmRange, setSqmRange] = useState<[number, number]>([
+    SQM_DOMAIN.min,
+    SQM_DOMAIN.max,
+  ]);
 
   const initialTypeRef = useRef<ListingType>("sale");
 
@@ -71,7 +70,7 @@ export default function FiltersDialog({
     const t: ListingType = live.type === "rent" ? "rent" : "sale";
     initialTypeRef.current = t;
 
-    // Rent disabled for now → force sale in UI while preserving other filters
+    // Type selection removed → always use "sale" for domain and writes
     const effectiveType: ListingType = "sale";
 
     setDraftType(effectiveType);
@@ -85,6 +84,12 @@ export default function FiltersDialog({
     setPriceRange([
       clamp(live.priceMin ?? dom.min, dom.min, dom.max),
       clamp(live.priceMax ?? dom.max, dom.min, dom.max),
+    ]);
+
+    // initialize sqm from URL
+    setSqmRange([
+      clamp(live.sqmMin ?? SQM_DOMAIN.min, SQM_DOMAIN.min, SQM_DOMAIN.max),
+      clamp(live.sqmMax ?? SQM_DOMAIN.max, SQM_DOMAIN.min, SQM_DOMAIN.max),
     ]);
 
     requestAnimationFrame(() => setAnimateIn(true));
@@ -105,15 +110,19 @@ export default function FiltersDialog({
 
   const domain = useMemo(() => priceDomain(draftType), [draftType]);
   const fmtPriceEUR = (n?: number) => (n == null ? "Any" : `€${n.toLocaleString()}`);
+  const fmtSqm = (n?: number) => (n == null ? "Any" : `${n} m²`);
 
   const handleApply = () => {
     const [bm0, bM0] = bedsRange;
     const [pm0, pM0] = priceRange;
+    const [sm0, sM0] = sqmRange;
+
     const [bm, bM] = [Math.min(bm0, bM0), Math.max(bm0, bM0)];
     const [pm, pM] = [Math.min(pm0, pM0), Math.max(pm0, pM0)];
+    const [sm, sM] = [Math.min(sm0, sM0), Math.max(sm0, sM0)];
 
     const next: FiltersWithViewport = {
-      type: "sale", // rent disabled for now
+      type: "sale", // type fixed for now
       kind: draftKind,
       counties: counties.length ? counties : undefined,
       towns: towns.length ? towns : undefined,
@@ -122,6 +131,8 @@ export default function FiltersDialog({
       bedsMax: bM === 6 ? undefined : bM,
       priceMin: pm === domain.min ? undefined : pm,
       priceMax: pM === domain.max ? undefined : pM,
+      sqmMin: sm === SQM_DOMAIN.min ? undefined : sm,
+      sqmMax: sM === SQM_DOMAIN.max ? undefined : sM,
     };
 
     const typeChanged = initialTypeRef.current !== "sale";
@@ -165,7 +176,12 @@ export default function FiltersDialog({
 
   return createPortal(
     <HeroUIProvider>
-      <div className="fixed inset-0 z-[10000]" role="dialog" aria-modal="true" aria-label="Filters">
+      <div
+        className="fixed inset-0 z-[10000]"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Filters"
+      >
         {/* Overlay */}
         <div
           className={[
@@ -196,22 +212,26 @@ export default function FiltersDialog({
           <div className="sticky top-0 z-10 bg-neutral-950/98 border-b border-white/10 px-4 sm:px-5 pt-[max(env(safe-area-inset-top),12px)] pb-3">
             <div className="flex items-center justify-between">
               <div className="text-sm font-semibold tracking-wide">Filters</div>
+
+              {/* X icon button */}
               <button
                 type="button"
                 onClick={() => {
                   setAnimateIn(false);
                   setTimeout(onClose, 160);
                 }}
-                className="cursor-pointer rounded-md bg-white/10 px-2.5 py-1.5 text-xs hover:bg-white/15 active:scale-[0.99]"
+                title="Close"
+                aria-label="Close"
+                className="cursor-pointer inline-flex items-center justify-center rounded-md p-2 text-white/85 hover:bg-white/10 hover:text-white active:scale-[0.99] focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
               >
-                Close
+                <XIcon className="h-5 w-5" />
               </button>
             </div>
           </div>
 
-          {/* Body — REORDERED */}
-          <div className="h-[calc(100dvh-110px)] overflow-y-auto px-4 sm:px-5 py-4 sm:py-5 flex flex-col space-y-10">
-            {/* 1) Location */}
+          {/* Body */}
+          <div className="h-[calc(100dvh-110px)] overflow-y-auto px-4 sm:px-5 py-4 sm:py-5 pb-10 sm:pb-10 flex flex-col space-y-10">
+          {/* 1) Location */}
             <Section title="Location">
               <LocationAutocomplete
                 options={locationOptions}
@@ -225,49 +245,9 @@ export default function FiltersDialog({
               />
             </Section>
 
-            {/* 2) Listing Type — Rent disabled with 'Coming soon' */}
-            <Section title="Listing Type">
-              <div className="inline-flex w-full items-center gap-1 rounded-lg border border-white/12 bg-black/40 p-1">
-                {/* SALE */}
-                <button
-                  type="button"
-                  className={[
-                    "flex-1 cursor-pointer inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition",
-                    "bg-white text-neutral-900 shadow-sm",
-                  ].join(" ")}
-                  aria-pressed={true}
-                  onClick={() => setDraftType("sale")}
-                >
-                  <Home className="h-4 w-4" />
-                  <span>Sale</span>
-                </button>
-
-                {/* RENT (disabled) */}
-                <button
-                  type="button"
-                  className={[
-                    "flex-1 inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm",
-                    "cursor-not-allowed text-white/35 bg-white/[0.06] border border-white/10",
-                  ].join(" ")}
-                  aria-disabled="true"
-                  title="Coming soon"
-                  onClick={(e) => {
-                    e.preventDefault();
-                  }}
-                >
-                  <KeyRound className="h-4 w-4 opacity-60" />
-                  <span>Rent</span>
-                  <span className="ml-1 text-[10px] uppercase tracking-wide opacity-70">
-                    Coming soon
-                  </span>
-                </button>
-              </div>
-            </Section>
-
-            {/* 3) Price */}
+            {/* 2) Price */}
             <Section title="Price">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-white/70">Range</span>
                 <span className="text-xs text-white/85">
                   {fmtPriceEUR(priceRange[0])} – {fmtPriceEUR(priceRange[1])}
                 </span>
@@ -303,10 +283,9 @@ export default function FiltersDialog({
               </div>
             </Section>
 
-            {/* 4) Bedrooms */}
+            {/* 3) Bedrooms */}
             <Section title="Bedrooms">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-white/70">Range</span>
                 <span className="text-xs text-white/85">
                   {bedsLabel(bedsRange[0])} – {bedsLabel(bedsRange[1])}
                 </span>
@@ -333,6 +312,44 @@ export default function FiltersDialog({
                       "w-4 h-4 rounded-full bg-white border border-white/40 shadow-[0_2px_10px_rgba(0,0,0,.35)] cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
                   }}
                 />
+              </div>
+            </Section>
+
+            {/* 4) Size (m²) */}
+            <Section title="Size (m²)">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-white/85">
+                  {fmtSqm(sqmRange[0])} – {fmtSqm(sqmRange[1])}
+                </span>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3">
+                <Slider
+                  aria-label="Size range"
+                  minValue={SQM_DOMAIN.min}
+                  maxValue={SQM_DOMAIN.max}
+                  step={SQM_DOMAIN.step}
+                  value={sqmRange}
+                  onChange={(v) => {
+                    if (Array.isArray(v)) {
+                      const [a, b] = v as [number, number];
+                      const lo = clamp(Math.min(a, b), SQM_DOMAIN.min, SQM_DOMAIN.max);
+                      const hi = clamp(Math.max(a, b), SQM_DOMAIN.min, SQM_DOMAIN.max);
+                      setSqmRange([lo, hi]);
+                    }
+                  }}
+                  className="w-full"
+                  classNames={{
+                    base: "pt-0.5 cursor-pointer select-none",
+                    track: "h-[6px] rounded-full bg-white/12",
+                    filler: "bg-white",
+                    thumb:
+                      "w-4 h-4 rounded-full bg-white border border-white/40 shadow-[0_2px_10px_rgba(0,0,0,.35)] cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40",
+                  }}
+                />
+                <div className="mt-1 flex justify-between text-[11px] text-white/55">
+                  <span>{SQM_DOMAIN.min} m²</span>
+                  <span>{SQM_DOMAIN.max} m²</span>
+                </div>
               </div>
             </Section>
 
@@ -374,32 +391,34 @@ export default function FiltersDialog({
               />
             </Section>
             <Notice>
-                Not all listings include every field (e.g. <em>town</em>) or they may be entered
-                inconsistently by agents. We do our best to match location from the full address
-                where possible.
+              Not all listings include every field (e.g. <em>town</em>) or they may be entered
+              inconsistently by agents. We do our best to match location from the full address
+              where possible.
             </Notice>
           </div>
-          
 
-          {/* Footer */}
-          <div className="sticky bottom-0 z-10 bg-neutral-950/98 border-t border-white/10 px-4 sm:px-5 pb-[max(env(safe-area-inset-bottom),12px)] pt-3 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setAnimateIn(false);
-                setTimeout(onClose, 160);
-              }}
-              className="cursor-pointer rounded-md bg-white/10 px-3 py-1.5 text-sm hover:bg-white/15 active:scale-[0.99]"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleApply}
-              className="cursor-pointer rounded-md bg-white px-3 py-1.5 text-sm font-semibold text-neutral-900 hover:opacity-95 active:scale-[0.99]"
-            >
-              Apply
-            </button>
+          {/* Footer (full-width buttons, orange Apply) */}
+          <div className="sticky bottom-0 z-10 bg-neutral-950/98 border-t border-white/10 px-4 sm:px-5 pb-[max(env(safe-area-inset-bottom),12px)] pt-3">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAnimateIn(false);
+                  setTimeout(onClose, 160);
+                }}
+                className="w-full cursor-pointer rounded-lg border border-white/15 bg-white/8 px-4 py-3 text-sm sm:text-base text-slate-100 hover:bg-white/12 active:scale-[0.995] transition"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleApply}
+                className="w-full cursor-pointer rounded-lg bg-orange-500 px-4 py-3 text-sm sm:text-base font-semibold text-white hover:bg-orange-400 active:scale-[0.995] transition shadow-sm"
+              >
+                Apply
+              </button>
+            </div>
           </div>
         </aside>
       </div>
@@ -426,9 +445,7 @@ function Section({
 }) {
   return (
     <section>
-      <div className="text-xl text-white/70 select-none leading-4 mb-2">
-        {title}
-      </div>
+      <div className="text-xl text-white/70 select-none leading-4 mb-2">{title}</div>
       <div className="[&>*]:mt-0">{children}</div>
     </section>
   );
@@ -712,15 +729,12 @@ function SourcesSelector({
   selected: string[];
   onChange: (next: string[]) => void;
 }) {
-  // Convert "MyHome" -> "myhome", "SherryFitz" -> "sherryfitz", etc.
   const logoFile = (name: string) =>
     `/logos/${name.replace(/\s+/g, "").toLowerCase()}.png`;
 
   const toggle = (opt: string) => {
     onChange(
-      selected.includes(opt)
-        ? selected.filter((x) => x !== opt)
-        : [...selected, opt]
+      selected.includes(opt) ? selected.filter((x) => x !== opt) : [...selected, opt]
     );
   };
 
@@ -786,7 +800,6 @@ function SourcesSelector({
               aria-pressed={active}
             >
               <span className="relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm overflow-hidden bg-white">
-                {/* Logo image with graceful fallback */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={src}
@@ -795,7 +808,6 @@ function SourcesSelector({
                   height={20}
                   loading="lazy"
                   onError={(e) => {
-                    // If no logo found, show a subtle dot fallback
                     const el = e.currentTarget;
                     el.style.display = "none";
                     const parent = el.parentElement;

@@ -64,8 +64,8 @@ function brandFromHost(host: string): string {
   if (h.includes("myhome")) return "myhome";
   if (h.includes("sherryfitz")) return "sherryfitz";
   if (h.includes("dng")) return "dng";
-  if (h.includes("propertypal")) return "propertypal";
-  if (h.includes("rightmove")) return "rightmove";
+  if (h.includes("westcorkproperty")) return "westcorkproperty";
+  if (h.includes("michelleburke")) return "michelleburke";
   if (h.includes("zoopla")) return "zoopla";
   if (h.includes("propertymap") || h.includes("findqo")) return "findqo";
   return "generic";
@@ -75,8 +75,8 @@ function prettyName(brand: string): string {
     case "myhome": return "MyHome";
     case "sherryfitz": return "SherryFitz";
     case "dng": return "DNG";
-    case "propertypal": return "PropertyPal";
-    case "rightmove": return "Rightmove";
+    case "westcorkproperty": return "James Lyon O'Keefe";
+    case "michelleburke": return "Michelle Burke";
     case "zoopla": return "Zoopla";
     case "findqo": return "PropertyMap";
     default: return "Source";
@@ -117,7 +117,7 @@ function SourcePill({ item }: { item: SourceItem }) {
   const brand = brandFromHost(host);
   const label = sourceLabel(item);
   const logoFor = (b: string) =>
-    ["myhome","findqo","sherryfitz","dng","propertypal","rightmove","zoopla"].includes(b)
+    ["myhome","findqo","sherryfitz","dng","westcorkproperty","michelleburke","zoopla"].includes(b)
       ? `/logos/${b}.png`
       : `/logos/generic.png`;
 

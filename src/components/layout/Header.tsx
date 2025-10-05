@@ -12,6 +12,7 @@ import {
   Calculator,
   Mail,
   ChevronRight,
+  Handshake,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -121,6 +122,9 @@ export default function Header() {
         >
           Mortgage Calculator
         </NavLink>
+        <NavLink href="/agents" current={pathname === "/agents"} minimal={minimal}>
+          Agents
+        </NavLink>
         <NavLink href="/contact" current={pathname === "/contact"} minimal={minimal}>
           Contact
         </NavLink>
@@ -179,6 +183,10 @@ export default function Header() {
                 icon={<Calculator className="h-4.5 w-4.5" />}
               >
                 Mortgage Calculator
+              </MobileItem>
+              <Divider />
+              <MobileItem href="/agents" icon={<Handshake className="h-4.5 w-4.5" />}>
+                Agents
               </MobileItem>
               <Divider />
               <MobileItem href="/contact" icon={<Mail className="h-4.5 w-4.5" />}>
