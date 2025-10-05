@@ -35,7 +35,7 @@ export default function MortgageCalcWrapper() {
             <div className="flex justify-center gap-5">
               <button
                 type="submit"
-                className="mt-4 w-1/4 mx-auto text-center cursor-pointer rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 hover:bg-white/10 hover:font-bold active:scale-[0.99] touch-manipulation"
+                className="mt-4 mx-auto text-center cursor-pointer rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 hover:bg-white/10 hover:font-bold active:scale-[0.99] touch-manipulation"
               >
                 Generate Graphs
               </button>

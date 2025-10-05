@@ -22,14 +22,14 @@ export default function LoanAmountInput({ form, setForm }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      <label className="w-1/4 text-lg">Mortgage Amount</label>
+      <label className="text-lg">Mortgage Amount</label>
       <input
         type="text"
         inputMode="numeric"
         value={form.loanAmount !== null ? formatter.format(form.loanAmount) : ""}
         onChange={handleChange}
         placeholder="€"
-        className="input-field w-1/4"
+        className="input-field"
       />
     </div>
   );

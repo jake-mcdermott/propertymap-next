@@ -98,9 +98,9 @@ export default function LoanGraphs({ data }: LoanGraphsProps) {
 
 
       {/* Line Chart */}
-      <div className="bg-neutral-800/20 shadow-md md:rounded-lg rounded-none p-6 mt-6">
-        <h2 className="text-xl font-semibold mb-4">Loan Overview</h2>
-        <div className="h-100 p-4">
+      <div className="bg-neutral-800/20 shadow-md md:rounded-lg rounded-none mt-6">
+        <h2 className="text-xl font-semibold mb-4 pl-4 pt-4">Loan Overview</h2>
+        <div className="h-100 pr-4 ">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={data.yearlyCumulative}>
               <XAxis dataKey="year" stroke="#aaaaaa" />
