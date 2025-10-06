@@ -128,7 +128,7 @@ function SourcePill({ item }: { item: SourceItem }) {
       target="_blank"
       rel="noreferrer"
       onClick={(e) => e.stopPropagation()}
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11.5px] leading-none bg-white/[0.06] text-slate-100 ring-1 ring-white/10 hover:bg-white hover:text-black transition"
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-[11.5px] leading-none bg-white/[0.06] text-slate-100 ring-1 ring-white/10 hover:bg-white hover:text-black transition"
       title={label}
     >
       <img

@@ -48,7 +48,7 @@ export default function MapStatusOverlay() {
   // - Mobile: top-right (avoid bottom sheet)
   // - md+: bottom-left (original spot)
   const containerCls =
-    "pointer-events-none absolute right-2 top-2 md:left-3 md:top-auto md:bottom-3 z-[1000] " +
+    "pointer-events-none absolute left-2 top-2 md:left-3 md:top-auto md:bottom-3 z-[1000] " +
     "md:z-[1000]"; // stays above bottom sheet (z-20) & tiles
 
   if (loading && !info) {

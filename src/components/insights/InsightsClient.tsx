@@ -38,7 +38,8 @@ import {
   type LiveRow,
 } from "@/lib/insights";
 
-import { fetchManifestClient, type ManifestInfo } from "@/lib/fetchManifestClient";
+import { type ManifestInfo } from "@/lib/fetchManifestClient";
+import { fetchManifestCached } from "@/lib/fetchManifestCache";
 
 const RoutingMap = dynamic(() => import("./RoutingMap"), { ssr: false });
 
@@ -396,7 +397,7 @@ export default function InsightsClient() {
   React.useEffect(() => {
     let alive = true;
     (async () => {
-      const m = await fetchManifestClient();
+      const m = await fetchManifestCached();
       if (!alive) return;
       setManifest(m);
     })();

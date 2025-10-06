@@ -60,6 +60,91 @@ const PAN_DURATION = 300;
 const EASE = 0.5;
 
 /* =====================================================================================
+   Mobile gesture: double-tap then drag to zoom
+   ===================================================================================== */
+function setupDoubleTapDragZoom(map: L.Map) {
+  if (!isMobileScreen()) return () => {};
+  const container = map.getContainer();
+
+  try { map.doubleClickZoom.disable(); } catch {}
+
+  let lastTap = 0;
+  let draggingZoom = false;
+  let startY = 0;
+  let startZoom = map.getZoom();
+  let anchor: L.LatLng | null = null;
+  let raf: number | null = null;
+
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const containerPointFromTouch = (t: Touch) => {
+    const rect = container.getBoundingClientRect();
+    return L.point(t.clientX - rect.left, t.clientY - rect.top);
+  };
+
+  const endDrag = () => {
+    draggingZoom = false;
+    anchor = null;
+    try { map.dragging.enable(); } catch {}
+  };
+
+  const onTouchStart = (e: TouchEvent) => {
+    if (e.touches.length !== 1) {
+      if (draggingZoom) endDrag();
+      return;
+    }
+    const now = performance.now();
+    const dt = now - lastTap;
+    lastTap = now;
+
+    if (dt < 300) {
+      e.preventDefault();
+      e.stopPropagation();
+      draggingZoom = true;
+      try { map.dragging.disable(); } catch {}
+      startY = e.touches[0].clientY;
+      startZoom = map.getZoom();
+
+      const cp = containerPointFromTouch(e.touches[0]);
+      try { anchor = map.containerPointToLatLng(cp); } catch { anchor = null; }
+    }
+  };
+
+  const onTouchMove = (e: TouchEvent) => {
+    if (!draggingZoom || e.touches.length !== 1 || !anchor) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const dy = e.touches[0].clientY - startY;
+    const dz = -dy / 120; // ~120px ≈ 1 zoom level
+    const next = clamp(startZoom + dz, map.getMinZoom(), map.getMaxZoom());
+
+    if (raf != null) cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      try { map.setZoomAround(anchor as L.LatLng, next, { animate: false } as any); } catch {}
+    });
+  };
+
+  const onTouchEnd = () => {
+    if (draggingZoom) endDrag();
+  };
+
+  container.addEventListener("touchstart", onTouchStart, { passive: false });
+  container.addEventListener("touchmove", onTouchMove, { passive: false });
+  container.addEventListener("touchend", onTouchEnd, { passive: false });
+  container.addEventListener("touchcancel", onTouchEnd, { passive: false });
+
+  return () => {
+    container.removeEventListener("touchstart", onTouchStart as any);
+    container.removeEventListener("touchmove", onTouchMove as any);
+    container.removeEventListener("touchend", onTouchEnd as any);
+    container.removeEventListener("touchcancel", onTouchEnd as any);
+    try { map.doubleClickZoom.enable(); } catch {}
+    try { map.dragging.enable(); } catch {}
+    if (raf != null) cancelAnimationFrame(raf);
+  };
+}
+
+/* =====================================================================================
    Component
    ===================================================================================== */
 export default function LeafletMap({
@@ -107,9 +192,56 @@ export default function LeafletMap({
   /* -----------------------------------------------------------------------------
      Map ref bridge
      ----------------------------------------------------------------------------- */
-  const setMapRef = (m: LeafletMapInstance | null) => {
-    mapRef.current = m;
-  };
+     const setMapRef = (m: LeafletMapInstance | null) => {
+      mapRef.current = m;
+      try {
+        (m as any)?.zoomControl?.setPosition(isMobileScreen() ? "topright" : "topleft");
+      } catch {}
+    
+      // Ensure popups are fully visible on open (not necessarily above the marker)
+      if (m) {
+        // avoid multiple bindings in dev/hmr
+        (m as any).off("popupopen");
+        (m as any).on("popupopen", (e: any) => {
+          try {
+            const map = m as any;
+            const latlng = e?.popup?.getLatLng?.();
+            if (!latlng) return;
+            const bottomPad = isMobileScreen() ? 180 : 40; // adjust if you have a bottom sheet
+            map.panInside(latlng, {
+              paddingTopLeft: [20, 20],
+              paddingBottomRight: [20, bottomPad],
+              animate: true,
+            });
+          } catch {}
+        });
+      }
+    };
+
+    useEffect(() => {
+      const handler = (ev: Event) => {
+        const d = (ev as CustomEvent).detail as { lat: number; lng: number };
+        const map = mapRef.current as any;
+        if (!map || !d) return;
+        try {
+          map.panInside(L.latLng(d.lat, d.lng), {
+            paddingTopLeft: [20, 20],
+            paddingBottomRight: [20, isMobileScreen() ? 180 : 40],
+            animate: true,
+          });
+        } catch {}
+      };
+      window.addEventListener("map:nudge-for-popup", handler as EventListener);
+      return () => window.removeEventListener("map:nudge-for-popup", handler as EventListener);
+    }, []);
+    
+  // Initialize mobile gesture once we have the map instance
+  useEffect(() => {
+    const m = mapRef.current as L.Map | null;
+    if (!m) return;
+    const cleanup = setupDoubleTapDragZoom(m);
+    return cleanup;
+  }, [mapRef.current]);
 
   /* -----------------------------------------------------------------------------
      Points (GeoJSON)
@@ -156,8 +288,8 @@ export default function LeafletMap({
           eircode: (l as any).eircode ?? null,
           img,
           sources,
-          town: (l as any).town ?? null,          // ✅ add
-          sizeSqm: (l as any).sizeSqm ?? null,    // ✅ add        
+          town: (l as any).town ?? null,
+          sizeSqm: (l as any).sizeSqm ?? null,
         },
       };
     });
@@ -250,9 +382,7 @@ export default function LeafletMap({
   useEffect(() => {
     lastSentRef.current = "";
     const id = requestAnimationFrame(() => {
-      try {
-        mapRef.current?.invalidateSize(false);
-      } catch {}
+      try { mapRef.current?.invalidateSize(false); } catch {}
       emitVisible();
     });
     return () => cancelAnimationFrame(id);
@@ -264,12 +394,8 @@ export default function LeafletMap({
     let tries = 0;
     const tick = () => {
       if (cancelled || didComputeVisible) return;
-      try {
-        mapRef.current?.invalidateSize(false);
-      } catch {}
-      try {
-        emitVisible();
-      } catch {}
+      try { mapRef.current?.invalidateSize(false); } catch {}
+      try { emitVisible(); } catch {}
       tries += 1;
       if (!cancelled && !didComputeVisible && tries < 10) setTimeout(tick, 90);
     };
@@ -282,9 +408,7 @@ export default function LeafletMap({
 
   useEffect(() => {
     const onRequery = () => {
-      try {
-        emitVisible();
-      } catch {}
+      try { emitVisible(); } catch {}
     };
     window.addEventListener("map:requery-visible", onRequery as EventListener);
     return () => window.removeEventListener("map:requery-visible", onRequery as EventListener);
@@ -298,9 +422,7 @@ export default function LeafletMap({
       const DEFAULT_CENTER: LatLngExpression = [53.5, -8.2];
       const DEFAULT_ZOOM = 6;
 
-      try {
-        map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: false });
-      } catch {}
+      try { map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: false }); } catch {}
 
       lastSentRef.current = "";
       requestAnimationFrame(() => emitVisible());
@@ -376,13 +498,8 @@ export default function LeafletMap({
   }, [listings, rawClusters]);
 
   /* -----------------------------------------------------------------------------
-     Focus helpers
+     Focus helpers — NO POPUPS (just pan/zoom)
      ----------------------------------------------------------------------------- */
-  const tryOpenPopup = useCallback((id: string) => {
-    if (isMobileScreen()) return;
-    markerRefs.current.get(id)?.openPopup();
-  }, []);
-
   const focusOnListing = useCallback(
     (id: string, lat: number, lng: number, zoomHint = 16) => {
       const map = mapRef.current as any;
@@ -399,9 +516,11 @@ export default function LeafletMap({
       } catch {
         map.setView([lat, lng], targetZoom, { animate: true });
       }
-      tryOpenPopup(id);
+
+      // highlight this marker immediately (and the nearest cluster if still clustered)
+      window.dispatchEvent(new CustomEvent("map:hover", { detail: { id } }));
     },
-    [tryOpenPopup]
+    []
   );
 
   useEffect(() => {
@@ -409,11 +528,88 @@ export default function LeafletMap({
 
     if (suppressNextFocusRef.current) {
       suppressNextFocusRef.current = false;
-      tryOpenPopup(active.id);
+      // just highlight; no popup
+      window.dispatchEvent(new CustomEvent("map:hover", { detail: { id: active.id } }));
       return;
     }
     focusOnListing(active.id, active.lat, active.lng, 16);
-  }, [active, focusOnListing, tryOpenPopup]);
+  }, [active, focusOnListing]);
+
+  /* -----------------------------------------------------------------------------
+     Focus-and-uncluster (card tap → zoom until single marker) — NO POPUPS
+     ----------------------------------------------------------------------------- */
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const d = (ev as CustomEvent).detail as {
+        id?: string;
+        lat: number;
+        lng: number;
+        zoomHint?: number;
+      };
+      const map = mapRef.current as any;
+      const idx = indexRef.current;
+      if (!map || !idx) return;
+
+      const id = d.id ?? null;
+      const target = L.latLng(d.lat, d.lng);
+      const maxZ = map.getMaxZoom?.() ?? 21;
+      let z = Math.max(map.getZoom?.() ?? 0, d.zoomHint ?? 15);
+
+      const isClusteredAt = (zoom: number): boolean => {
+        const eps = 1e-4;
+        const hits = idx.getClusters([d.lng - eps, d.lat - eps, d.lng + eps, d.lat + eps], Math.round(zoom));
+        if (hits.some((h: any) => h?.properties?.cluster === true)) return true;
+        const leaves = hits.filter((h: any) => h?.properties?.cluster !== true);
+        return leaves.length > 1;
+      };
+
+      const finish = () => {
+        // highlight after the final zoom settles
+        if (id) {
+          window.dispatchEvent(new CustomEvent("map:hover", { detail: { id } }));
+        }
+        // Optional: nudge up a bit to keep the highlighted marker visible above a sheet
+        // map.panBy([0, -Math.round(window.innerHeight * 0.10)], { animate: true });
+      };
+
+      const step = () => {
+        const clustered = isClusteredAt(z);
+        if (!clustered || z >= maxZ) {
+          map.flyTo(target, Math.min(maxZ, z), {
+            animate: true,
+            duration: 0.42,
+            easeLinearity: 0.4,
+            noMoveStart: true,
+          });
+          setTimeout(finish, 280);
+          return;
+        }
+        z = Math.min(maxZ, z + 1);
+        map.flyTo(target, z, {
+          animate: true,
+          duration: 0.25,
+          easeLinearity: 0.4,
+          noMoveStart: true,
+        });
+        setTimeout(step, 260);
+      };
+
+      try {
+        map.flyTo(target, z, {
+          animate: true,
+          duration: 0.28,
+          easeLinearity: 0.4,
+          noMoveStart: true,
+        });
+      } catch {
+        map.setView(target, z, { animate: true });
+      }
+      setTimeout(step, 300);
+    };
+
+    window.addEventListener("map:focus-and-uncluster", handler as EventListener);
+    return () => window.removeEventListener("map:focus-and-uncluster", handler as EventListener);
+  }, [indexReady]);
 
   /* =====================================================================================
      Render
@@ -505,8 +701,8 @@ export default function LeafletMap({
         }
         .pm-popup .leaflet-popup-tip { background: #0b1220; border: 1px solid var(--pm-border-soft); }
 
-        /* (Mobile) If you use a drawer instead of popups, hide popups */
         @media (max-width: 767px) {
+          /* You currently hide popups on mobile. That's fine since we removed popups. */
           .leaflet-container .leaflet-popup,
           .leaflet-container .leaflet-popup-pane {
             display: none !important;
@@ -523,7 +719,6 @@ export default function LeafletMap({
           minZoom={5}
           maxZoom={21}
           scrollWheelZoom
-          // keep standard double-click / double-tap zoom enabled
           doubleClickZoom={true}
           preferCanvas
           className="h-full w-full"
@@ -552,7 +747,7 @@ export default function LeafletMap({
             emitVisible={emitVisible}
           />
 
-          {/* Clusters + markers (no spidering, no hold-zoom) */}
+          {/* Clusters + markers (no spidering, no popups) */}
           {indexReady &&
             rawClusters.map((feature, idx) => {
               const [lng, lat] = feature.geometry.coordinates as [number, number];
@@ -571,39 +766,48 @@ export default function LeafletMap({
                       const map = mapRef.current as any;
                       const idxRef = indexRef.current;
                       if (!map || !idxRef) return;
-                    
-                      // Mobile + max zoom → if leaves coincide on screen, open list sheet
+
                       const isMobileMaxZoom =
                         isMobileScreen() && (map.getZoom?.() ?? 0) >= (map.getMaxZoom?.() ?? 21);
-                    
+
                       if (isMobileMaxZoom) {
-                        const leaves = idxRef.getLeaves(cid, Infinity, 0) as Array<GeoJSON.Feature<GeoJSON.Point, PtProps>>;
-                    
+                        const leaves = idxRef.getLeaves(cid, Infinity, 0) as Array<
+                          GeoJSON.Feature<GeoJSON.Point, PtProps>
+                        >;
+
                         if (leaves.length >= 2) {
-                          const toPx = (lng: number, lat: number) => map.project([lat, lng], map.getZoom());
-                          const p0 = toPx(leaves[0].geometry.coordinates[0], leaves[0].geometry.coordinates[1]);
+                          const toPx = (lng: number, lat: number) =>
+                            map.project([lat, lng], map.getZoom());
+                          const p0 = toPx(
+                            leaves[0].geometry.coordinates[0],
+                            leaves[0].geometry.coordinates[1]
+                          );
                           const thresholdPx = 3;
                           const allSamePoint = leaves.every((lf) => {
                             const [lng2, lat2] = lf.geometry.coordinates;
                             const p = toPx(lng2, lat2);
                             return Math.hypot(p.x - p0.x, p.y - p0.y) <= thresholdPx;
                           });
-                    
+
                           if (allSamePoint) {
-                            const ids = leaves.map((lf) => lf.properties?.listingId).filter(Boolean) as string[];
+                            const ids = leaves
+                              .map((lf) => lf.properties?.listingId)
+                              .filter(Boolean) as string[];
                             window.dispatchEvent(
                               new CustomEvent("map:cluster-pick", {
                                 detail: { ids, lat: clat, lng: clng, openSheet: true },
                               })
                             );
-                            return; // stop default zoom
+                            return;
                           }
                         }
                       }
-                    
-                      // Default expand/zoom
+
                       const base = idxRef.getClusterExpansionZoom(cid);
-                      const desired = Math.min(Math.max(base + 1, map.getZoom() + 1), map.getMaxZoom());
+                      const desired = Math.min(
+                        Math.max(base + 1, map.getZoom() + 1),
+                        map.getMaxZoom()
+                      );
                       map.flyTo([clat, clng], desired, {
                         animate: true,
                         duration: 0.55,
@@ -628,11 +832,11 @@ export default function LeafletMap({
                     else markerRefs.current.delete(i);
                   }}
                   onSelect={(id2: string) => {
-                    suppressNextFocusRef.current = true; // map click → popup only
+                    // No popups. Center+zoom via external event if needed,
+                    // but at minimum highlight on direct marker tap.
+                    suppressNextFocusRef.current = true;
                     onSelect(id2);
-                    if (!isMobileScreen()) {
-                      try { markerRefs.current.get(id2)?.openPopup(); } catch {}
-                    }
+                    window.dispatchEvent(new CustomEvent("map:hover", { detail: { id: id2 } }));
                   }}
                   highlighted={hoveredId === id}
                 />

@@ -49,7 +49,7 @@ function formatSqm(n?: number | null) {
 type SourceItem = { name?: string; url: string };
 
 function brandFromHost(host: string): string {
-  const h = host.replace(/^www\./, "").toLowerCase();
+  const h = host.replace(/^(?:www\.)?/i, "").toLowerCase();
   if (h.includes("myhome")) return "myhome";
   if (h.includes("sherryfitz")) return "sherryfitz";
   if (h.includes("dng")) return "dng";
@@ -59,21 +59,34 @@ function brandFromHost(host: string): string {
   if (h.includes("propertymap") || h.includes("findqo")) return "findqo";
   return "generic";
 }
+
 function prettyName(brand: string): string {
   switch (brand) {
-    case "myhome": return "MyHome";
-    case "sherryfitz": return "SherryFitz";
-    case "dng": return "DNG";
-    case "westcorkproperty": return "James Lyon O'Keefe";
-    case "michelleburke": return "Michelle Burke";
-    case "zoopla": return "Zoopla";
-    case "findqo": return "PropertyMap";
-    default: return "Source";
+    case "myhome":
+      return "MyHome";
+    case "sherryfitz":
+      return "SherryFitz";
+    case "dng":
+      return "DNG";
+    case "westcorkproperty":
+      return "James Lyon O'Keefe";
+    case "michelleburke":
+      return "Michelle Burke";
+    case "zoopla":
+      return "Zoopla";
+    case "findqo":
+      return "PropertyMap";
+    default:
+      return "Source";
   }
 }
+
 function deriveSources(listing: Listing): SourceItem[] {
-  const primary = listing.url as string | undefined;
-  const extra = (listing as any).sources as Array<{ name?: string; url: string }> | undefined;
+  const primary = (listing.url as string) || undefined;
+  const extra =
+    ((listing as any).sources as Array<{ name?: string; url: string }>) ||
+    undefined;
+
   const fallback: SourceItem[] = primary ? [{ name: undefined, url: primary }] : [];
   const src = (extra && extra.length ? extra : fallback).slice(0, 8);
   return src.map((s) => ({ name: s.name?.trim(), url: s.url }));
@@ -81,15 +94,19 @@ function deriveSources(listing: Listing): SourceItem[] {
 
 function SourcePill({ item }: { item: SourceItem }) {
   let host = "";
-  try { host = new URL(item.url).host; } catch {}
+  try {
+    host = new URL(item.url).host;
+  } catch {}
   const brand = brandFromHost(host);
   const label =
-    item.name || prettyName(brand) || host.replace(/^www\./, "") || "Source";
+    item.name || prettyName(brand) || host.replace(/^(?:www\.)?/i, "") || "Source";
 
   const logoFor = (b: string) =>
-    ["myhome", "findqo", "sherryfitz", "dng", "westcorkproperty", "michelleburke", "zoopla"].includes(b)
+    ["myhome", "findqo", "sherryfitz", "dng", "westcorkproperty", "michelleburke", "zoopla"].includes(
+      b
+    )
       ? `/logos/${b}.png`
-      : `/logos/generic.png`;
+      : "/logos/generic.png";
 
   const [src, setSrc] = React.useState(logoFor(brand));
 
@@ -105,12 +122,10 @@ function SourcePill({ item }: { item: SourceItem }) {
         bg-white/10 ring-1 ring-white/12 no-underline decoration-transparent
         !text-white visited:!text-white hover:!text-white focus:!text-white active:!text-white
         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/20
-
         transition-all duration-150 ease-out will-change-transform
         hover:bg-white/14 hover:ring-white/20
         motion-safe:hover:-translate-y-px active:scale-[0.99]
         shadow-none hover:shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_6px_14px_rgba(0,0,0,0.25)]
-
         [&>*]:!text-white [&_span]:!text-white
       "
     >
@@ -135,14 +150,16 @@ function SourcePill({ item }: { item: SourceItem }) {
 /* ---------------------- component ---------------------- */
 export default function ListingCardPopup({ listing }: { listing: Listing }) {
   const { primary } = splitAddress(listing.address, listing.county);
-  const title = listing.address?.trim() || primary;
+  const title = (listing.address?.trim() || primary || "").trim();
 
   const locLine = locationLineFrom(listing);
   const sizeText = formatSqm((listing as any).sizeSqm as number | null | undefined);
 
   const hasCoords =
-    typeof listing.lat === "number" && !Number.isNaN(listing.lat) &&
-    typeof listing.lng === "number" && !Number.isNaN(listing.lng);
+    typeof listing.lat === "number" &&
+    !Number.isNaN(listing.lat) &&
+    typeof listing.lng === "number" &&
+    !Number.isNaN(listing.lng);
 
   const gmapsUrl = hasCoords
     ? `https://www.google.com/maps/search/?api=1&query=${listing.lat},${listing.lng}`
@@ -155,14 +172,21 @@ export default function ListingCardPopup({ listing }: { listing: Listing }) {
   const hasSources = srcs.length > 0;
 
   return (
-    <div className="w-[320px] overflow-hidden rounded-lg text-white bg-black border border-white/16 select-none">
-      {/* Media */}
-      <div className="relative aspect-[16/9] bg-black">
+    <div className="w-[320px] overflow-hidden rounded-lg text-white bg-black shadow-[0_6px_18px_rgba(0,0,0,0.35)] select-none">
+      {/* Media (seamless edges) */}
+      <div className="relative aspect-[16/9] overflow-hidden">
         {listing.images?.[0] ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={listing.images[0]} alt={title} className="h-full w-full object-cover" />
+          <img
+            src={listing.images[0]}
+            alt={title}
+            className="absolute inset-0 block h-full w-full object-cover transform-gpu scale-[1.01]"
+            draggable={false}
+          />
         ) : (
-          <div className="grid h-full w-full place-items-center text-xs text-white/50">No image</div>
+          <div className="grid h-full w-full place-items-center text-xs text-white/50">
+            No image
+          </div>
         )}
 
         {/* Overlay for legibility */}
@@ -183,9 +207,9 @@ export default function ListingCardPopup({ listing }: { listing: Listing }) {
             rel="noreferrer"
             aria-label="Open in Google Maps"
             className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-[6px]
-                      border border-white/20 bg-black/90 px-2 py-0.5 text-[12px] font-semibold
-                      !text-white visited:!text-white hover:!text-white active:!text-white focus:!text-white
-                      no-underline backdrop-blur-sm hover:bg-black transition-colors"
+                       border border-white/20 bg-black/90 px-2 py-0.5 text-[12px] font-semibold
+                       !text-white visited:!text-white hover:!text-white active:!text-white focus:!text-white
+                       no-underline backdrop-blur-sm hover:bg-black transition-colors"
             onClick={(e) => e.stopPropagation()}
           >
             <MapPin className="h-3.5 w-3.5 text-white" strokeWidth={1.6} />
@@ -241,11 +265,11 @@ export default function ListingCardPopup({ listing }: { listing: Listing }) {
         {hasSources && (
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             {srcs.slice(0, 6).map((s, i) => (
-              <SourcePill key={`${listing.id}-pop-${i}-${s.url}`} item={s} />
+              <SourcePill key={`${listing.id ?? title}-pop-${i}-${s.url}`} item={s} />
             ))}
             {srcs.length > 6 && (
               <span className="inline-flex items-center rounded-full px-2.5 py-1 text-[11.5px]
-                              text-white/90 ring-1 ring-inset ring-white/12 bg-white/8">
+                               text-white/90 ring-1 ring-inset ring-white/12 bg-white/8">
                 +{srcs.length - 6} more
               </span>
             )}

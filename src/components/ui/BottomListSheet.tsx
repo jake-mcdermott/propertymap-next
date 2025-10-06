@@ -22,7 +22,7 @@ type Props = {
   setPageSize: (n: number) => void;
 
   /** Optional controlled open/close (used for same-point clusters) */
-  open?: boolean;       // when provided: true → full snap, false → peek snap
+  open?: boolean;       // true → full snap, false → peek snap
   onClose?: () => void; // called after user drags/toggles to peek while open
 };
 
@@ -201,11 +201,16 @@ export default function BottomListSheet({
     });
   };
 
-  // pagination helpers
-  const canPrev = page > 1;
-  const canNext = page < localTotalPages;
+  // 👉 collapse helper used on card tap
+  const collapseToPeek = React.useCallback(() => {
+    const [peek] = snapHeights;
+    setHeight(peek);
+    if (open && onClose) {
+      requestAnimationFrame(() => onClose());
+    }
+  }, [open, onClose, snapHeights]);
 
-  // layout
+  // pagination helpers
   const FOOTER_H = 48;
   const HEADER_H = 104;
   const translateY = `translateY(${heightToTranslateY(height)}px)`;
@@ -216,6 +221,9 @@ export default function BottomListSheet({
     document.body.style.overscrollBehaviorY = "contain";
     return () => { document.body.style.overscrollBehaviorY = prev; };
   }, [dragging]);
+
+  const canPrev = page > 1;
+  const canNext = page < localTotalPages;
 
   return (
     <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ top: 0 }}>
@@ -307,7 +315,20 @@ export default function BottomListSheet({
                   <ul className="divide-y divide-white/10">
                     {localSlice.map((r) => (
                       <li key={r.id} className="relative transition">
-                        <ListingCard listing={r} selected={false} onClick={undefined} />
+                        <ListingCard
+                          listing={r}
+                          selected={false}
+                          onClick={() => {
+                            // 1) collapse sheet
+                            collapseToPeek();
+                            // 2) ask map to center+zoom until de-clustered
+                            window.dispatchEvent(
+                              new CustomEvent("map:focus-and-uncluster", {
+                                detail: { id: r.id, lat: r.lat, lng: r.lng, zoomHint: 16 },
+                              })
+                            );
+                          }}
+                        />
                       </li>
                     ))}
                   </ul>
@@ -335,10 +356,10 @@ export default function BottomListSheet({
                   <button
                     type="button"
                     onClick={() => page > 1 && setPage(page - 1)}
-                    disabled={page <= 1}
+                    disabled={!canPrev}
                     className={[
                       "px-3 py-1.5 text-sm rounded-md ring-1",
-                      page > 1
+                      canPrev
                         ? "bg-white/5 ring-white/15 hover:bg-white/10 text-slate-100"
                         : "bg-white/5 ring-white/10 text-slate-500 cursor-not-allowed",
                     ].join(" ")}
@@ -348,10 +369,10 @@ export default function BottomListSheet({
                   <button
                     type="button"
                     onClick={() => page < localTotalPages && setPage(page + 1)}
-                    disabled={page >= localTotalPages}
+                    disabled={!canNext}
                     className={[
                       "px-3 py-1.5 text-sm rounded-md ring-1",
-                      page < localTotalPages
+                      canNext
                         ? "bg-white/5 ring-white/15 hover:bg-white/10 text-slate-100"
                         : "bg-white/5 ring-white/10 text-slate-500 cursor-not-allowed",
                     ].join(" ")}
