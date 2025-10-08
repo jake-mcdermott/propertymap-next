@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { GeoJSON, useMap, useMapEvent } from "react-leaflet";
 import type { Feature, FeatureCollection, Point } from "geojson";
 import L from "leaflet";
-import { Clock, TrainFront, TramFront } from "lucide-react";
+import { Clock, TrainFront, TramFront, ShoppingCart } from "lucide-react";
 import { fetchManifestClient } from "@/lib/fetchManifestClient";
 import { renderToString } from "react-dom/server";
 
@@ -81,28 +81,32 @@ export default function MapStatusOverlay() {
     useState<FeatureCollection<Point, { name?: string; id?: string }> | null>(null);
   const [loadingLuasStops, setLoadingLuasStops] = useState(true);
 
+  // SUPERMARKETS
+  const [supermarkets, setSupermarkets] =
+    useState<FeatureCollection<Point, Record<string, any>> | null>(null);
+  const [loadingSupermarkets, setLoadingSupermarkets] = useState(true);
+
   // UI prefs
   const [showTransit, setShowTransit] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem("pm-layer-transport") === "1";
-    } catch {
-      return false;
-    }
+    try { return localStorage.getItem("pm-layer-transport") === "1"; } catch { return false; }
   });
+  const [showSupermarkets, setShowSupermarkets] = useState<boolean>(() => {
+    try { return localStorage.getItem("pm-layer-supermarkets") === "1"; } catch { return false; }
+  });
+
   const [minZoomForRails, setMinZoomForRails] = useState<number>(() => {
-    try {
-      return parseInt(localStorage.getItem("pm-layer-transport-minzoom") || "10", 10);
-    } catch {
-      return 10;
-    }
+    try { return parseInt(localStorage.getItem("pm-layer-transport-minzoom") || "10", 10); } catch { return 10; }
   });
-  const stationsMinZoom = Math.max(minZoomForRails + 1, 9); // stations appear a touch later
+
+  // Stations visible from Z14+
+  const stationsMinZoom = 14;
 
   // refresh prefs when dialog “Apply” fires
   useEffect(() => {
     const refresh = () => {
       try {
         setShowTransit(localStorage.getItem("pm-layer-transport") === "1");
+        setShowSupermarkets(localStorage.getItem("pm-layer-supermarkets") === "1");
         setMinZoomForRails(parseInt(localStorage.getItem("pm-layer-transport-minzoom") || "10", 10));
       } catch {}
     };
@@ -110,51 +114,68 @@ export default function MapStatusOverlay() {
     return () => window.removeEventListener("map:requery-visible", refresh);
   }, []);
 
-  // Ensure panes exist + z-index rules (force stations over listing/cluster markers)
-  useEffect(() => {
-    // Rails (below markers)
-    const railPane = map.getPane("pmRailPane") ?? map.createPane("pmRailPane");
-    if (railPane) {
-      railPane.style.zIndex = "620";
-      railPane.style.pointerEvents = "none";
-    }
+// Ensure panes exist + z-index rules (force stations & supermarkets over listing/cluster markers)
+useEffect(() => {
+  // Rails (below markers)
+  const railPane = map.getPane("pmRailPane") ?? map.createPane("pmRailPane");
+  if (railPane) {
+    railPane.style.zIndex = "620";
+    railPane.style.pointerEvents = "none";
+  }
 
-    // LUAS lines (below markers)
-    const tramPane = map.getPane("pmTramPane") ?? map.createPane("pmTramPane");
-    if (tramPane) {
-      tramPane.style.zIndex = "622";
-      tramPane.style.pointerEvents = "none";
-    }
+  // LUAS lines (below markers)
+  const tramPane = map.getPane("pmTramPane") ?? map.createPane("pmTramPane");
+  if (tramPane) {
+    tramPane.style.zIndex = "622";
+    tramPane.style.pointerEvents = "none";
+  }
 
-    // Stations — ABOVE listing/cluster markers even with zIndexOffset on those
-    // markerPane is 600; clusters/listings may add +2000 or more; beat them decisively.
-    const topZ = showTransit ? 20000 : 600;
-    const tipZ = showTransit ? 20500 : 650;
+  // Top-level z for things that must sit above listings/clusters.
+  // markerPane is ~600; clusters/listings may use zIndexOffset; 20k wins.
+  const transitTopZ = showTransit ? 20000 : 600;
+  const transitTipZ = showTransit ? 20500 : 650;
 
-    const stationPane = map.getPane("pmStationPane") ?? map.createPane("pmStationPane");
-    if (stationPane) {
-      stationPane.style.zIndex = String(topZ);
-      stationPane.style.pointerEvents = "auto";
-    }
+  const supermarketTopZ = showSupermarkets ? 20000 : 600;
+  const supermarketTipZ = showSupermarkets ? 20500 : 650;
 
-    const tramStopPane = map.getPane("pmTramStationPane") ?? map.createPane("pmTramStationPane");
-    if (tramStopPane) {
-      tramStopPane.style.zIndex = String(topZ);
-      tramStopPane.style.pointerEvents = "auto";
-    }
+  // Rail stations (above listings)
+  const stationPane = map.getPane("pmStationPane") ?? map.createPane("pmStationPane");
+  if (stationPane) {
+    stationPane.style.zIndex = String(transitTopZ);
+    stationPane.style.pointerEvents = "auto";
+  }
 
-    // Tooltips above everything marker-like
-    const stationTipPane = map.getPane("pmStationTooltipPane") ?? map.createPane("pmStationTooltipPane");
-    if (stationTipPane) {
-      stationTipPane.style.zIndex = String(tipZ);
-      stationTipPane.style.pointerEvents = "none";
-    }
-    const tramTipPane = map.getPane("pmTramTooltipPane") ?? map.createPane("pmTramTooltipPane");
-    if (tramTipPane) {
-      tramTipPane.style.zIndex = String(tipZ);
-      tramTipPane.style.pointerEvents = "none";
-    }
-  }, [map, showTransit]);
+  // LUAS stops (above listings)
+  const tramStopPane = map.getPane("pmTramStationPane") ?? map.createPane("pmTramStationPane");
+  if (tramStopPane) {
+    tramStopPane.style.zIndex = String(transitTopZ);
+    tramStopPane.style.pointerEvents = "auto";
+  }
+
+  // Supermarkets (NOW above listings)
+  const smPane = map.getPane("pmSupermarketPane") ?? map.createPane("pmSupermarketPane");
+  if (smPane) {
+    smPane.style.zIndex = String(supermarketTopZ);
+    smPane.style.pointerEvents = "auto";
+  }
+  const smTipPane = map.getPane("pmSupermarketTipPane") ?? map.createPane("pmSupermarketTipPane");
+  if (smTipPane) {
+    smTipPane.style.zIndex = String(supermarketTipZ);
+    smTipPane.style.pointerEvents = "none";
+  }
+
+  // Tooltips (transit)
+  const stationTipPane = map.getPane("pmStationTooltipPane") ?? map.createPane("pmStationTooltipPane");
+  if (stationTipPane) {
+    stationTipPane.style.zIndex = String(transitTipZ);
+    stationTipPane.style.pointerEvents = "none";
+  }
+  const tramTipPane = map.getPane("pmTramTooltipPane") ?? map.createPane("pmTramTooltipPane");
+  if (tramTipPane) {
+    tramTipPane.style.zIndex = String(transitTipZ);
+    tramTipPane.style.pointerEvents = "none";
+  }
+}, [map, showTransit, showSupermarkets]);
 
   // Load “updatedAt”
   useEffect(() => {
@@ -168,9 +189,7 @@ export default function MapStatusOverlay() {
         if (alive) setLoadingInfo(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, []);
 
   // Load railways
@@ -263,6 +282,27 @@ export default function MapStatusOverlay() {
     return () => { alive = false; };
   }, []);
 
+  // Load Supermarkets
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/data/supermarkets.geojson", { cache: "force-cache" });
+        if (!res.ok) throw new Error(`Failed supermarkets.geojson: ${res.status}`);
+        const json =
+          (await res.json()) as FeatureCollection<Point, Record<string, any>>;
+        if (!alive) return;
+        setSupermarkets(json);
+      } catch {
+        if (!alive) return;
+        setSupermarkets(null);
+      } finally {
+        if (alive) setLoadingSupermarkets(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const rel = useMemo(
     () => (info?.updatedAt ? formatRelative(new Date(info.updatedAt)) : null),
     [info?.updatedAt]
@@ -272,12 +312,15 @@ export default function MapStatusOverlay() {
   const containerCls =
     "pointer-events-none absolute left-2 top-2 md:left-3 md:top-auto md:bottom-3 z-[1000] md:z-[1000]";
 
-  // visibility gates (share min-zoom)
+  // visibility gates
   const railsVisible = !!railways && !!showTransit && zoom >= minZoomForRails;
   const stationsVisible = !!stations && !!showTransit && zoom >= stationsMinZoom;
 
   const luasVisible = !!luas && !!showTransit && zoom >= minZoomForRails;
   const luasStopsVisible = !!luasStops && !!showTransit && zoom >= stationsMinZoom;
+
+  const supermarketsMinZoom = 12; // show fairly early, adjust if needed
+  const supermarketsVisible = !!supermarkets && !!showSupermarkets && zoom >= supermarketsMinZoom;
 
   // dynamic sizes
   const railWeightMain = Math.max(1.5, Math.min(3, (zoom - 8) * 0.4)); // rails thickness
@@ -343,7 +386,7 @@ export default function MapStatusOverlay() {
               }),
               pane: "pmStationPane",
               interactive: true,
-              zIndexOffset: 0, // pane zIndex already guarantees top-most
+              zIndexOffset: 0,
               keyboard: false,
             });
           }}
@@ -402,6 +445,59 @@ export default function MapStatusOverlay() {
               offset: L.point(0, -14),
               sticky: true,
               className: "rounded-md px-2 py-1 text-[12px] bg-black/80 text-white ring-1 ring-white/10",
+            });
+          }}
+        />
+      )}
+
+      {/* Supermarkets (white disc + cart icon) */}
+      {supermarketsVisible && !loadingSupermarkets && (
+        <GeoJSON
+          pane="pmSupermarketPane"
+          data={supermarkets!}
+          pointToLayer={(feature, latlng) => {
+            const sz = Math.round(Math.max(20, Math.min(28, 10 + (zoom - 9) * 2.0)));
+            const iconSvg = renderToString(
+              <ShoppingCart
+                size={Math.round(sz * 0.58)}
+                strokeWidth={2.2}
+                className="text-neutral-900"
+              />
+            );
+            const html = `
+              <div
+                class="grid place-items-center rounded-full bg-white
+                       ring-1 ring-emerald-300/70 shadow-[0_2px_8px_rgba(0,0,0,0.20)]"
+                style="width:${sz}px;height:${sz}px"
+                role="img" aria-label="Supermarket"
+              >${iconSvg}</div>`;
+            return L.marker(latlng, {
+              icon: L.divIcon({
+                className: "pm-supermarket",
+                html,
+                iconSize: [sz, sz],
+                iconAnchor: [sz / 2, sz / 2],
+              }),
+              pane: "pmSupermarketPane",
+              interactive: true,
+              zIndexOffset: 0,
+              keyboard: false,
+            });
+          }}
+          onEachFeature={(feature, layer) => {
+            const p = (feature?.properties ?? {}) as AnyProps;
+            const label =
+              p.branch ??
+              p.name ??
+              (p.chain ? `${p.chain} Supermarket` : "Supermarket");
+            layer.bindTooltip(String(label), {
+              pane: "pmSupermarketTipPane",
+              direction: "top",
+              opacity: 0.95,
+              offset: L.point(0, -12),
+              sticky: true,
+              className:
+                "rounded-md px-2 py-1 text-[12px] bg-black/80 text-white ring-1 ring-white/10",
             });
           }}
         />

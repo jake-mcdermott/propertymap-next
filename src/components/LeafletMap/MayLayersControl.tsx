@@ -212,14 +212,12 @@ export default function MapLayersDialog({
               />
             </div>
 
-            {/* Supermarkets (future) */}
             <RowToggle
               icon={<ShoppingCart className="h-4 w-4" />}
-              label="Supermarkets (In Progress)"
-              sub="Show major grocery chains"
+              label="Supermarkets"
+              sub="Tesco, Aldi & SuperValu stores (more chains in progress)"
               checked={supermarkets}
               onChange={setSupermarkets}
-              disabled
             />
 
             {/* Future overlays (disabled for now) */}
