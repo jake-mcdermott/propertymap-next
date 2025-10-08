@@ -1,39 +1,34 @@
-// src/components/PropertyMap/LeafletMap.tsx
 "use client";
 
 import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
+  useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction,
 } from "react";
 import { MapContainer, TileLayer, type MapContainerProps } from "react-leaflet";
-import type {
-  Map as LeafletMapInstance,
-  LatLngBounds,
-  LatLngExpression,
-  LatLngLiteral,
-} from "leaflet";
+import type { Map as LeafletMapInstance, LatLngExpression } from "leaflet";
 import * as L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import Supercluster, { type ClusterFeature, type AnyProps } from "supercluster";
+import type Supercluster from "supercluster";
 import type { Listing } from "@/lib/types";
 
 import ClusterMarker from "./markers/ClusterMarker";
 import ListingMarker from "./markers/ListingMarker";
 import { ClProps, PtProps } from "./types";
-import MapStatusOverlay from "./MapStatusOverlap";
+import MapStatusOverlay from "./MapStatusOverlay";
 
 import MapRefBridge from "./MapRefBridge";
 import MapStateSync from "./MapStateSync";
 import { isMobileScreen } from "./helpers";
 
-/* =====================================================================================
-   Types / props
-   ===================================================================================== */
+import { EASE, FLY_DURATION, MAP_MAX_ZOOM, PAN_DURATION } from "./constants";
+import { setupDoubleTapDragZoom } from "./gestures";
+import MapGlobalStyles from "./MapGlobalStyles";
+import useBasemap from "./hooks/useBaseMap";
+import usePersistedView from "./hooks/usePersistedView";
+import useSuperclusterIndex from "./hooks/useSuperclusterIndex";
+import useVisibleEmitter from "./hooks/useVisibleEmitter";
+import isClusterFeature from "./utils/isClusterFeature";
+import { domainLabel } from "./utils/domainLabel";
+
 export type PopupMode = "auto" | "desktop" | "mobile";
 export type LeafletMapProps = {
   listings: Listing[];
@@ -48,512 +43,164 @@ export type LeafletMapProps = {
 };
 
 type PointFeature<P = Record<string, unknown>> = GeoJSON.Feature<GeoJSON.Point, P>;
-const isClusterFeature = (
-  f: PointFeature<PtProps> | ClusterFeature<ClProps>
-): f is ClusterFeature<ClProps> => (f.properties as AnyProps).cluster === true;
 
-/* =====================================================================================
-   Constants
-   ===================================================================================== */
-const FLY_DURATION = 450;
-const PAN_DURATION = 300;
-const EASE = 0.5;
-
-/* =====================================================================================
-   Mobile gesture: double-tap then drag to zoom
-   ===================================================================================== */
-function setupDoubleTapDragZoom(map: L.Map) {
-  if (!isMobileScreen()) return () => {};
-  const container = map.getContainer();
-
-  try { map.doubleClickZoom.disable(); } catch {}
-
-  let lastTap = 0;
-  let draggingZoom = false;
-  let startY = 0;
-  let startZoom = map.getZoom();
-  let anchor: L.LatLng | null = null;
-  let raf: number | null = null;
-
-  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-  const containerPointFromTouch = (t: Touch) => {
-    const rect = container.getBoundingClientRect();
-    return L.point(t.clientX - rect.left, t.clientY - rect.top);
-  };
-
-  const endDrag = () => {
-    draggingZoom = false;
-    anchor = null;
-    try { map.dragging.enable(); } catch {}
-  };
-
-  const onTouchStart = (e: TouchEvent) => {
-    if (e.touches.length !== 1) {
-      if (draggingZoom) endDrag();
-      return;
-    }
-    const now = performance.now();
-    const dt = now - lastTap;
-    lastTap = now;
-
-    if (dt < 300) {
-      e.preventDefault();
-      e.stopPropagation();
-      draggingZoom = true;
-      try { map.dragging.disable(); } catch {}
-      startY = e.touches[0].clientY;
-      startZoom = map.getZoom();
-
-      const cp = containerPointFromTouch(e.touches[0]);
-      try { anchor = map.containerPointToLatLng(cp); } catch { anchor = null; }
-    }
-  };
-
-  const onTouchMove = (e: TouchEvent) => {
-    if (!draggingZoom || e.touches.length !== 1 || !anchor) return;
-    e.preventDefault();
-    e.stopPropagation();
-
-    const dy = e.touches[0].clientY - startY;
-    const dz = -dy / 120; // ~120px ≈ 1 zoom level
-    const next = clamp(startZoom + dz, map.getMinZoom(), map.getMaxZoom());
-
-    if (raf != null) cancelAnimationFrame(raf);
-    raf = requestAnimationFrame(() => {
-      try { map.setZoomAround(anchor as L.LatLng, next, { animate: false } as any); } catch {}
-    });
-  };
-
-  const onTouchEnd = () => {
-    if (draggingZoom) endDrag();
-  };
-
-  container.addEventListener("touchstart", onTouchStart, { passive: false });
-  container.addEventListener("touchmove", onTouchMove, { passive: false });
-  container.addEventListener("touchend", onTouchEnd, { passive: false });
-  container.addEventListener("touchcancel", onTouchEnd, { passive: false });
-
-  return () => {
-    container.removeEventListener("touchstart", onTouchStart as any);
-    container.removeEventListener("touchmove", onTouchMove as any);
-    container.removeEventListener("touchend", onTouchEnd as any);
-    container.removeEventListener("touchcancel", onTouchEnd as any);
-    try { map.doubleClickZoom.enable(); } catch {}
-    try { map.dragging.enable(); } catch {}
-    if (raf != null) cancelAnimationFrame(raf);
-  };
-}
-
-/* =====================================================================================
-   Component
-   ===================================================================================== */
 export default function LeafletMap({
-  listings,
-  active,
-  onSelect,
-  center,
-  mapProps,
-  className = "h-full w-full",
-  onVisibleChange,
-  onReady,
+  listings, active, onSelect, center, mapProps, className = "h-full w-full", onVisibleChange, onReady,
 }: LeafletMapProps) {
   const mapRef = useRef<LeafletMapInstance | null>(null);
-
-  // Marker refs for standard ListingMarker
   const markerRefs = useRef<Map<string, L.Marker>>(new Map());
   const suppressNextFocusRef = useRef(false);
 
-  // Ready gates
   const [booted, setBooted] = useState(false);
   const readySentRef = useRef(false);
   const [tilesReady, setTilesReady] = useState(false);
-  const [didComputeVisible, setDidComputeVisible] = useState(false);
-
-  // Cluster index
-  const indexRef = useRef<Supercluster<PtProps, ClProps> | null>(null);
-  const [indexReady, setIndexReady] = useState(false);
-  const [indexVersion, setIndexVersion] = useState(0);
-
-  // Hover highlight
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [hoveredClusterId, setHoveredClusterId] = useState<number | null>(null);
 
-  // View state
-  const initialCenter = useMemo<LatLngExpression>(() => {
-    if (center) return center;
-    if (active) return [active.lat, active.lng] as LatLngExpression;
-    return [53.5, -8.2];
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const initialZoom = useMemo(() => (isMobileScreen() ? 6 : 7), []);
+  const { initialCenter, initialZoom } = usePersistedView({ center, active });
   const [bbox, setBbox] = useState<[number, number, number, number]>([-10.8, 51.3, -5.3, 55.5]);
-  const [zoom, setZoom] = useState(6);
+  const [zoom, setZoom] = useState(initialZoom);
 
-  /* -----------------------------------------------------------------------------
-     Map ref bridge
-     ----------------------------------------------------------------------------- */
-     const setMapRef = (m: LeafletMapInstance | null) => {
-      mapRef.current = m;
-      try {
-        (m as any)?.zoomControl?.setPosition(isMobileScreen() ? "topright" : "topleft");
-      } catch {}
-    
-      // Ensure popups are fully visible on open (not necessarily above the marker)
-      if (m) {
-        // avoid multiple bindings in dev/hmr
-        (m as any).off("popupopen");
-        (m as any).on("popupopen", (e: any) => {
-          try {
-            const map = m as any;
-            const latlng = e?.popup?.getLatLng?.();
-            if (!latlng) return;
-            const bottomPad = isMobileScreen() ? 180 : 40; // adjust if you have a bottom sheet
-            map.panInside(latlng, {
-              paddingTopLeft: [20, 20],
-              paddingBottomRight: [20, bottomPad],
-              animate: true,
-            });
-          } catch {}
-        });
-      }
-    };
+  const { basemap } = useBasemap();
 
-    useEffect(() => {
-      const handler = (ev: Event) => {
-        const d = (ev as CustomEvent).detail as { lat: number; lng: number };
-        const map = mapRef.current as any;
-        if (!map || !d) return;
-        try {
-          map.panInside(L.latLng(d.lat, d.lng), {
-            paddingTopLeft: [20, 20],
-            paddingBottomRight: [20, isMobileScreen() ? 180 : 40],
-            animate: true,
-          });
-        } catch {}
-      };
-      window.addEventListener("map:nudge-for-popup", handler as EventListener);
-      return () => window.removeEventListener("map:nudge-for-popup", handler as EventListener);
-    }, []);
-    
-  // Initialize mobile gesture once we have the map instance
-  useEffect(() => {
-    const m = mapRef.current as L.Map | null;
-    if (!m) return;
-    const cleanup = setupDoubleTapDragZoom(m);
-    return cleanup;
-  }, [mapRef.current]);
-
-  /* -----------------------------------------------------------------------------
-     Points (GeoJSON)
-     ----------------------------------------------------------------------------- */
   const points = useMemo(() => {
-    const domainLabel = (href?: string) => {
-      if (!href) return null;
-      try {
-        const host = new URL(href).host.replace(/^www\./, "");
-        if (host.includes("myhome")) return "MyHome";
-        if (host.includes("propertymap")) return "PropertyMap";
-        if (host.includes("findqo")) return "FindQo";
-        if (host.includes("sherryfitz")) return "SherryFitz";
-        if (host.includes("dng")) return "DNG";
-        if (host.includes("westcorkproperty")) return "James Lyon O'Keefe";
-        if (host.includes("michelleburke")) return "Michelle Burke";
-        return host.split(".")[0];
-      } catch {
-        return null;
-      }
-    };
-
     return listings.map<PointFeature<PtProps>>((l) => {
       const img = Array.isArray(l.images) && l.images.length ? l.images[0] : null;
       const primary = l.url as string | undefined;
       const extra = l.sources as Array<{ name: string; url: string }> | undefined;
       const derived = primary ? [{ name: domainLabel(primary) ?? "Source", url: primary }] : [];
       const sources = (extra && extra.length ? extra : derived).slice(0, 8);
-
       return {
         type: "Feature",
         geometry: { type: "Point", coordinates: [l.lng, l.lat] },
         properties: {
-          listingId: l.id,
-          price: l.price ?? 0,
-          lat: l.lat,
-          lng: l.lng,
-          title: l.title ?? null,
-          beds: l.beds ?? null,
-          baths: l.baths ?? null,
-          county: l.county ?? null,
-          address: l.address ?? null,
-          url: primary ?? null,
-          eircode: (l as any).eircode ?? null,
-          img,
-          sources,
-          town: (l as any).town ?? null,
-          sizeSqm: (l as any).sizeSqm ?? null,
+          listingId: l.id, price: l.price ?? 0, lat: l.lat, lng: l.lng, title: l.title ?? null,
+          beds: l.beds ?? null, baths: l.baths ?? null, county: l.county ?? null, address: l.address ?? null,
+          url: primary ?? null, eircode: (l as any).eircode ?? null, img, sources,
+          town: (l as any).town ?? null, sizeSqm: (l as any).sizeSqm ?? null,
         },
       };
     });
   }, [listings]);
 
-  /* -----------------------------------------------------------------------------
-     Cluster index
-     ----------------------------------------------------------------------------- */
-  useEffect(() => {
-    let cancelled = false;
-    setIndexReady(false);
+  const { indexRef, indexReady, rawClusters } = useSuperclusterIndex({ points, bbox, zoom });
+  const { emitVisible, didComputeVisible } = useVisibleEmitter({ listings, mapRef, onVisibleChange });
 
-    const raf = requestAnimationFrame(() => {
-      if (cancelled) return;
-      const idx = new Supercluster<PtProps, ClProps>({
-        radius: 100,
-        maxZoom: 22,
-        minZoom: 0,
-        minPoints: 2,
-      });
-      idx.load(points);
-      if (cancelled) return;
-      indexRef.current = idx;
-      setIndexVersion((v) => v + 1);
-      setIndexReady(true);
-    });
-
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf);
-    };
-  }, [points]);
-
-  const rawClusters = useMemo(() => {
-    const idx = indexRef.current;
-    if (!idx || !indexReady) return [] as Array<PointFeature<PtProps> | ClusterFeature<ClProps>>;
-    return idx.getClusters(bbox, Math.round(zoom)) as Array<
-      PointFeature<PtProps> | ClusterFeature<ClProps>
-    >;
-  }, [bbox, zoom, indexReady, indexVersion]);
-
-  /* -----------------------------------------------------------------------------
-     Ready gate
-     ----------------------------------------------------------------------------- */
   useEffect(() => {
     if (readySentRef.current) return;
     if (!indexReady || !tilesReady || !didComputeVisible) return;
-
     readySentRef.current = true;
     setBooted(true);
     requestAnimationFrame(() => onReady?.());
   }, [indexReady, tilesReady, didComputeVisible, onReady]);
 
-  /* -----------------------------------------------------------------------------
-     Visible ids
-     ----------------------------------------------------------------------------- */
-  const lastSentRef = useRef<string>("");
+  const setMapRef = (m: LeafletMapInstance | null) => {
+    mapRef.current = m;
+    try { (m as any)?.zoomControl?.setPosition(isMobileScreen() ? "topright" : "topleft"); } catch {}
+    if (!m) return;
 
-  const safeGetBounds = (map: LeafletMapInstance): LatLngBounds | null => {
-    try {
-      // @ts-expect-error _loaded exists at runtime
-      if (!map || !map._loaded) return null;
-      return map.getBounds();
-    } catch {
-      return null;
-    }
+    (m as any).off("popupopen");
+    (m as any).on("popupopen", (e: any) => {
+      try {
+        const map = m as any;
+        const latlng = e?.popup?.getLatLng?.();
+        if (!latlng) return;
+        const bottomPad = isMobileScreen() ? 180 : 40;
+        map.panInside(latlng, { paddingTopLeft: [20, 20], paddingBottomRight: [20, bottomPad], animate: true });
+      } catch {}
+    });
+
+    const save = () => {
+      try {
+        const c = m.getCenter(); const z = Math.min(m.getZoom(), MAP_MAX_ZOOM);
+        localStorage.setItem("pm-view", JSON.stringify({ c: [c.lat, c.lng], z }));
+      } catch {}
+    };
+    m.on("moveend zoomend", save);
   };
 
-  const emitVisible = useMemo(() => {
-    return () => {
-      const map = mapRef.current;
-      if (!map) return;
-      const b = safeGetBounds(map);
-      if (!b) return;
-
-      const ids = listings
-        .filter((l) => b.contains({ lat: l.lat, lng: l.lng } as LatLngLiteral))
-        .map((l) => l.id);
-
-      const hash = ids.length ? ids.slice().sort().join("|") : "";
-      if (hash !== lastSentRef.current) {
-        lastSentRef.current = hash;
-        onVisibleChange?.(ids);
-      }
-
-      if (!didComputeVisible) setDidComputeVisible(true);
+  useEffect(() => {
+    const handler = (ev: Event) => {
+      const d = (ev as CustomEvent).detail as { lat: number; lng: number };
+      const map = mapRef.current as any; if (!map || !d) return;
+      try {
+        map.panInside(L.latLng(d.lat, d.lng), {
+          paddingTopLeft: [20, 20], paddingBottomRight: [20, isMobileScreen() ? 180 : 40], animate: true,
+        });
+      } catch {}
     };
-  }, [onVisibleChange, listings, didComputeVisible]);
+    window.addEventListener("map:nudge-for-popup", handler as EventListener);
+    return () => window.removeEventListener("map:nudge-for-popup", handler as EventListener);
+  }, []);
 
   useEffect(() => {
-    lastSentRef.current = "";
-    const id = requestAnimationFrame(() => {
-      try { mapRef.current?.invalidateSize(false); } catch {}
-      emitVisible();
-    });
-    return () => cancelAnimationFrame(id);
-  }, [listings, emitVisible]);
-
-  useEffect(() => {
-    if (!indexReady || !tilesReady) return;
-    let cancelled = false;
-    let tries = 0;
-    const tick = () => {
-      if (cancelled || didComputeVisible) return;
-      try { mapRef.current?.invalidateSize(false); } catch {}
-      try { emitVisible(); } catch {}
-      tries += 1;
-      if (!cancelled && !didComputeVisible && tries < 10) setTimeout(tick, 90);
-    };
-    const t0 = setTimeout(tick, 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(t0);
-    };
-  }, [indexReady, tilesReady, emitVisible, didComputeVisible]);
-
-  useEffect(() => {
-    const onRequery = () => {
-      try { emitVisible(); } catch {}
-    };
-    window.addEventListener("map:requery-visible", onRequery as EventListener);
-    return () => window.removeEventListener("map:requery-visible", onRequery as EventListener);
-  }, [emitVisible]);
-
-  useEffect(() => {
-    const onReset = () => {
-      const map = mapRef.current;
-      if (!map) return;
-
-      const DEFAULT_CENTER: LatLngExpression = [53.5, -8.2];
-      const DEFAULT_ZOOM = 6;
-
-      try { map.setView(DEFAULT_CENTER, DEFAULT_ZOOM, { animate: false }); } catch {}
-
-      lastSentRef.current = "";
-      requestAnimationFrame(() => emitVisible());
-    };
-
-    window.addEventListener("map:resetViewport", onReset as EventListener);
-    return () => window.removeEventListener("map:resetViewport", onReset as EventListener);
-  }, [emitVisible]);
-
-  /* -----------------------------------------------------------------------------
-     Hover → highlight nearest cluster when marker not mounted
-     ----------------------------------------------------------------------------- */
-  function findClusterIdForPoint(
-    lat: number,
-    lng: number,
-    idx: Supercluster<PtProps, ClProps> | null,
-    currentZoom: number,
-    currentClusters: Array<PointFeature<PtProps> | ClusterFeature<ClProps>>,
-    map: LeafletMapInstance | null
-  ): number | null {
-    if (!idx) return null;
-
-    const z = Math.round(currentZoom);
-    const eps = 1e-4;
-    const bboxTiny: [number, number, number, number] = [lng - eps, lat - eps, lng + eps, lat + eps];
-    const hits = idx.getClusters(bboxTiny, z) as Array<PointFeature<PtProps> | ClusterFeature<ClProps>>;
-    const hitCluster = hits.find(isClusterFeature) as ClusterFeature<ClProps> | undefined;
-
-    if (hitCluster?.id != null) {
-      const cid = typeof hitCluster.id === "number" ? hitCluster.id : Number(hitCluster.id);
-      if (Number.isFinite(cid)) return cid;
-    }
-
-    if (!map) return null;
-
-    let best: { id: number; d: number } | null = null;
-    const p = (map as any).project([lat, lng], (map as any).getZoom());
-    for (const c of currentClusters) {
-      if ((c as any).properties.cluster) {
-        const [clng, clat] = c.geometry.coordinates as [number, number];
-        const pc = (map as any).project([clat, clng], (map as any).getZoom());
-        const d = Math.hypot(pc.x - p.x, pc.y - p.y);
-        const cid = Number((c as ClusterFeature<ClProps>).id);
-        if (!Number.isFinite(cid)) continue;
-        if (!best || d < best.d) best = { id: cid, d };
-      }
-    }
-    return best && best.d < 48 ? best.id : null;
-  }
+    const m = mapRef.current as L.Map | null; if (!m) return;
+    return setupDoubleTapDragZoom(m);
+  }, [mapRef.current]);
 
   useEffect(() => {
     const onHover = (ev: Event) => {
       const d = (ev as CustomEvent).detail as { id?: string } | undefined;
-      const id = d?.id ?? null;
-      setHoveredId(id);
-
+      const id = d?.id ?? null; setHoveredId(id);
       if (!id) return setHoveredClusterId(null);
 
-      const mk = markerRefs.current.get(id);
-      if (mk) return setHoveredClusterId(null);
-
+      const mk = markerRefs.current.get(id); if (mk) return setHoveredClusterId(null);
       const row = listings.find((r) => r.id === id);
-      const map = mapRef.current;
-      const idx = indexRef.current;
+      const map = mapRef.current; const idx = indexRef.current as unknown as Supercluster<PtProps, ClProps> | null;
       if (!row || !map || !idx) return setHoveredClusterId(null);
 
-      const cid = findClusterIdForPoint(row.lat, row.lng, idx, (map as any).getZoom(), rawClusters, map);
-      setHoveredClusterId(cid ?? null);
-    };
+      const z = Math.round((map as any).getZoom());
+      const eps = 1e-4;
+      const hits = idx.getClusters([row.lng - eps, row.lat - eps, row.lng + eps, row.lat + eps], z);
+      const hit = hits.find((h: any) => h?.properties?.cluster === true) as any;
+      if (hit?.id != null) return setHoveredClusterId(Number(hit.id));
 
+      // fallback to nearest cluster in current set
+      const p = (map as any).project([row.lat, row.lng], (map as any).getZoom());
+      let best: { id: number; d: number } | null = null;
+      for (const c of rawClusters) {
+        if ((c as any).properties.cluster) {
+          const [clng, clat] = c.geometry.coordinates as [number, number];
+          const pc = (map as any).project([clat, clng], (map as any).getZoom());
+          const d2 = Math.hypot(pc.x - p.x, pc.y - p.y);
+          const cid = Number((c as any).id); if (!Number.isFinite(cid)) continue;
+          if (!best || d2 < best.d) best = { id: cid, d: d2 };
+        }
+      }
+      setHoveredClusterId(best && best.d < 48 ? best.id : null);
+    };
     window.addEventListener("map:hover", onHover as EventListener);
     return () => window.removeEventListener("map:hover", onHover as EventListener);
   }, [listings, rawClusters]);
 
-  /* -----------------------------------------------------------------------------
-     Focus helpers — NO POPUPS (just pan/zoom)
-     ----------------------------------------------------------------------------- */
-  const focusOnListing = useCallback(
-    (id: string, lat: number, lng: number, zoomHint = 16) => {
-      const map = mapRef.current as any;
-      if (!map) return;
-
-      const targetZoom = Math.max(map.getZoom(), zoomHint);
-      try {
-        map.flyTo([lat, lng], targetZoom, {
-          animate: true,
-          duration: FLY_DURATION / 1000,
-          easeLinearity: EASE,
-          noMoveStart: true,
-        });
-      } catch {
-        map.setView([lat, lng], targetZoom, { animate: true });
-      }
-
-      // highlight this marker immediately (and the nearest cluster if still clustered)
-      window.dispatchEvent(new CustomEvent("map:hover", { detail: { id } }));
-    },
-    []
-  );
+  const focusOnListing = useCallback((id: string, lat: number, lng: number, zoomHint = 16) => {
+    const map = mapRef.current as any; if (!map) return;
+    const targetZoom = Math.min(MAP_MAX_ZOOM, Math.max(map.getZoom(), zoomHint));
+    try {
+      map.flyTo([lat, lng], targetZoom, { animate: true, duration: FLY_DURATION / 1000, easeLinearity: EASE, noMoveStart: true });
+    } catch {
+      map.setView([lat, lng], targetZoom, { animate: true });
+    }
+    window.dispatchEvent(new CustomEvent("map:hover", { detail: { id } }));
+  }, []);
 
   useEffect(() => {
     if (!active) return;
-
     if (suppressNextFocusRef.current) {
       suppressNextFocusRef.current = false;
-      // just highlight; no popup
       window.dispatchEvent(new CustomEvent("map:hover", { detail: { id: active.id } }));
       return;
     }
     focusOnListing(active.id, active.lat, active.lng, 16);
   }, [active, focusOnListing]);
 
-  /* -----------------------------------------------------------------------------
-     Focus-and-uncluster (card tap → zoom until single marker) — NO POPUPS
-     ----------------------------------------------------------------------------- */
   useEffect(() => {
     const handler = (ev: Event) => {
-      const d = (ev as CustomEvent).detail as {
-        id?: string;
-        lat: number;
-        lng: number;
-        zoomHint?: number;
-      };
-      const map = mapRef.current as any;
-      const idx = indexRef.current;
-      if (!map || !idx) return;
-
-      const id = d.id ?? null;
-      const target = L.latLng(d.lat, d.lng);
-      const maxZ = map.getMaxZoom?.() ?? 21;
-      let z = Math.max(map.getZoom?.() ?? 0, d.zoomHint ?? 15);
+      const d = (ev as CustomEvent).detail as { id?: string; lat: number; lng: number; zoomHint?: number };
+      const map = mapRef.current as any; const idx = indexRef.current; if (!map || !idx) return;
+      const id = d.id ?? null; const target = L.latLng(d.lat, d.lng);
+      const maxZ = Math.min(map.getMaxZoom?.() ?? MAP_MAX_ZOOM, MAP_MAX_ZOOM);
+      let z = Math.max(map.getZoom?.() ?? 0, Math.min(d.zoomHint ?? 15, MAP_MAX_ZOOM));
 
       const isClusteredAt = (zoom: number): boolean => {
         const eps = 1e-4;
@@ -563,57 +210,27 @@ export default function LeafletMap({
         return leaves.length > 1;
       };
 
-      const finish = () => {
-        // highlight after the final zoom settles
-        if (id) {
-          window.dispatchEvent(new CustomEvent("map:hover", { detail: { id } }));
-        }
-        // Optional: nudge up a bit to keep the highlighted marker visible above a sheet
-        // map.panBy([0, -Math.round(window.innerHeight * 0.10)], { animate: true });
-      };
+      const finish = () => { if (id) window.dispatchEvent(new CustomEvent("map:hover", { detail: { id } })); };
 
       const step = () => {
         const clustered = isClusteredAt(z);
         if (!clustered || z >= maxZ) {
-          map.flyTo(target, Math.min(maxZ, z), {
-            animate: true,
-            duration: 0.42,
-            easeLinearity: 0.4,
-            noMoveStart: true,
-          });
-          setTimeout(finish, 280);
-          return;
+          map.flyTo(target, Math.min(maxZ, z), { animate: true, duration: 0.42, easeLinearity: 0.4, noMoveStart: true });
+          setTimeout(finish, 280); return;
         }
         z = Math.min(maxZ, z + 1);
-        map.flyTo(target, z, {
-          animate: true,
-          duration: 0.25,
-          easeLinearity: 0.4,
-          noMoveStart: true,
-        });
+        map.flyTo(target, z, { animate: true, duration: 0.25, easeLinearity: 0.4, noMoveStart: true });
         setTimeout(step, 260);
       };
 
-      try {
-        map.flyTo(target, z, {
-          animate: true,
-          duration: 0.28,
-          easeLinearity: 0.4,
-          noMoveStart: true,
-        });
-      } catch {
-        map.setView(target, z, { animate: true });
-      }
+      try { map.flyTo(target, z, { animate: true, duration: 0.28, easeLinearity: 0.4, noMoveStart: true }); }
+      catch { map.setView(target, z, { animate: true }); }
       setTimeout(step, 300);
     };
-
     window.addEventListener("map:focus-and-uncluster", handler as EventListener);
     return () => window.removeEventListener("map:focus-and-uncluster", handler as EventListener);
   }, [indexReady]);
 
-  /* =====================================================================================
-     Render
-     ===================================================================================== */
   const showMap = booted || indexReady;
   const mapOpacityClass = showMap ? "opacity-100" : "opacity-0";
   const mapTransitionClass = "transition-opacity duration-300";
@@ -625,118 +242,68 @@ export default function LeafletMap({
     return `${listings.length}:${first}:${last}`;
   }, [listings]);
 
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      try { mapRef.current?.invalidateSize(false); } catch {}
+      emitVisible();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [listings, emitVisible]);
+
   return (
     <>
-      <style jsx global>{`
-        :root {
-          --pm-brand-1: #01677c;
-          --pm-brand-2: #01677c;
-          --pm-on-dark: #eef2ff;
-          --pm-border: rgba(255,255,255,0.22);
-          --pm-border-soft: rgba(255,255,255,0.14);
-          --pm-zoom-ms: 300ms;
-        }
+      <MapGlobalStyles />
 
-        .leaflet-container { background: #05080f; outline: none; }
-
-        /* Ensure markers & popups sit above tiles */
-        .leaflet-pane.leaflet-marker-pane { z-index: 9998 !important; }
-        .leaflet-pane.leaflet-popup-pane { z-index: 9999 !important; }
-
-        /* Listing marker pill (used by <ListingMarker/>) */
-        .pm-icon.pm-marker { background: transparent; border: 0; }
-        .pm-marker-box { position: relative; }
-        .pm-marker-pill {
-          position: absolute;
-          left: 50%;
-          bottom: 0;
-          transform: translateX(-50%);
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 3px 8px;
-          height: 24px;
-          border-radius: 9999px;
-          color: #fff;
-          white-space: nowrap;
-          background: linear-gradient(180deg, rgba(255,255,255,.15) 0%, rgba(255,255,255,.06) 100%),
-                      linear-gradient(135deg, var(--pm-brand-1) 0%, var(--pm-brand-2) 100%);
-          border: 1px solid var(--pm-border);
-          backdrop-filter: blur(2px);
-          box-shadow: 0 8px 18px rgba(0,0,0,.35);
-        }
-        .pm-marker-price { font-weight: 900; font-size: 12.5px; letter-spacing: .15px; }
-        .pm-marker-pill.is-highlighted {
-          background: linear-gradient(135deg, #fb923c 0%, #f97316 45%, #ea580c 100%) !important;
-          border-color: rgba(251,146,60,.95);
-          color: #fff;
-          box-shadow: 0 0 0 2px rgba(251,146,60,.35), 0 10px 22px rgba(0,0,0,.45);
-          transform: translateX(-50%) scale(1.06);
-        }
-
-        /* Cluster pill (used by <ClusterMarker/>) */
-        .pm-cluster { background: transparent; border: 0; padding: 0; }
-        .pm-cluster-outer { transform: translate(-50%, -100%); }
-        .pm-cluster-pill {
-          display: inline-flex; align-items: center; justify-content: center;
-          height: 28px; padding: 0 12px; border-radius: 9999px;
-          border: 1px solid var(--pm-border); color: #eef2ff;
-          font-weight: 800; font-size: 13px; letter-spacing: .15px;
-          background: radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.18), rgba(255,255,255,0) 60%),
-                      linear-gradient(135deg, var(--pm-brand-1) 0%, var(--pm-brand-2) 100%);
-          box-shadow: 0 8px 18px rgba(0,0,0,.35);
-        }
-        .pm-cluster-outer.is-highlighted .pm-cluster-pill {
-          background: linear-gradient(135deg, #fb923c 0%, #f97316 45%, #ea580c 100%) !important;
-          border-color: rgba(251,146,60,.95); color: #fff;
-          box-shadow: 0 0 0 2px rgba(251,146,60,.35), 0 10px 22px rgba(0,0,0,.45);
-        }
-
-        /* Optional popup theme */
-        .pm-popup .leaflet-popup-content { margin: 0 !important; padding: 0 !important; }
-        .pm-popup .leaflet-popup-content-wrapper {
-          background: radial-gradient(90% 100% at 100% 0%, rgba(124,58,237,.12), rgba(124,58,237,0) 70%), #0b1220;
-          color: #e5eaf6; border: 1px solid var(--pm-border-soft); backdrop-filter: blur(6px);
-          border-radius: 12px; box-shadow: 0 14px 34px rgba(2,4,8,.6); overflow: hidden;
-        }
-        .pm-popup .leaflet-popup-tip { background: #0b1220; border: 1px solid var(--pm-border-soft); }
-
-        @media (max-width: 767px) {
-          /* You currently hide popups on mobile. That's fine since we removed popups. */
-          .leaflet-container .leaflet-popup,
-          .leaflet-container .leaflet-popup-pane {
-            display: none !important;
-            visibility: hidden !important;
-          }
-        }
-      `}</style>
-
-      <div className={`${className} ${mapTransitionClass} ${mapOpacityClass}`}>
+      <div className={`${className} relative transition-opacity ${mapTransitionClass} ${mapOpacityClass}`}>
         <MapContainer
           key={datasetKey}
+          {...mapProps}
           center={initialCenter}
           zoom={initialZoom}
           minZoom={5}
-          maxZoom={21}
+          maxZoom={MAP_MAX_ZOOM}
           scrollWheelZoom
-          doubleClickZoom={true}
+          doubleClickZoom
           preferCanvas
           className="h-full w-full"
           zoomAnimation
           fadeAnimation
-          {...mapProps}
         >
           <MapRefBridge setMapRef={setMapRef} emitVisible={emitVisible} panDurationMs={PAN_DURATION} />
 
-          <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            attribution="&copy; OpenStreetMap contributors &copy; CARTO"
-            subdomains={["a", "b", "c", "d"]}
-            detectRetina
-            maxNativeZoom={20}
-            maxZoom={22}
-            eventHandlers={{ load: () => setTilesReady(true) }}
-          />
+          {basemap === "standard" ? (
+            <TileLayer
+              key="standard"
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              attribution="&copy; OpenStreetMap &copy; CARTO"
+              subdomains={["a","b","c","d"]}
+              maxZoom={MAP_MAX_ZOOM}
+              updateWhenZooming={false}
+              keepBuffer={4}
+              eventHandlers={{ load: () => setTilesReady(true) }}
+            />
+          ) : basemap === "satellite" ? (
+            <TileLayer
+              key="satellite"
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              attribution="Tiles &copy; Esri"
+              maxZoom={MAP_MAX_ZOOM}
+              updateWhenZooming={false}
+              keepBuffer={4}
+              eventHandlers={{ load: () => setTilesReady(true) }}
+            />
+          ) : (
+            <TileLayer
+              key="dark"
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png"
+              attribution="&copy; OpenStreetMap &copy; CARTO"
+              subdomains={["a","b","c","d"]}
+              maxZoom={MAP_MAX_ZOOM}
+              updateWhenZooming={false}
+              keepBuffer={4}
+              eventHandlers={{ load: () => setTilesReady(true) }}
+            />
+          )}
 
           <MapStateSync
             setBbox={setBbox as Dispatch<SetStateAction<[number, number, number, number]>>}
@@ -747,101 +314,52 @@ export default function LeafletMap({
             emitVisible={emitVisible}
           />
 
-          {/* Clusters + markers (no spidering, no popups) */}
-          {indexReady &&
-            rawClusters.map((feature, idx) => {
-              const [lng, lat] = feature.geometry.coordinates as [number, number];
+          {indexReady && rawClusters.map((feature, i) => {
+            const [lng, lat] = feature.geometry.coordinates as [number, number];
 
-              if (isClusterFeature(feature)) {
-                const count = feature.properties.point_count as number;
-                const clusterId = Number(feature.id);
-                return (
-                  <ClusterMarker
-                    key={`cluster-${clusterId}-${idx}`}
-                    clusterId={clusterId}
-                    lat={lat}
-                    lng={lng}
-                    count={count}
-                    onExpand={(cid, clat, clng) => {
-                      const map = mapRef.current as any;
-                      const idxRef = indexRef.current;
-                      if (!map || !idxRef) return;
-
-                      const isMobileMaxZoom =
-                        isMobileScreen() && (map.getZoom?.() ?? 0) >= (map.getMaxZoom?.() ?? 21);
-
-                      if (isMobileMaxZoom) {
-                        const leaves = idxRef.getLeaves(cid, Infinity, 0) as Array<
-                          GeoJSON.Feature<GeoJSON.Point, PtProps>
-                        >;
-
-                        if (leaves.length >= 2) {
-                          const toPx = (lng: number, lat: number) =>
-                            map.project([lat, lng], map.getZoom());
-                          const p0 = toPx(
-                            leaves[0].geometry.coordinates[0],
-                            leaves[0].geometry.coordinates[1]
-                          );
-                          const thresholdPx = 3;
-                          const allSamePoint = leaves.every((lf) => {
-                            const [lng2, lat2] = lf.geometry.coordinates;
-                            const p = toPx(lng2, lat2);
-                            return Math.hypot(p.x - p0.x, p.y - p0.y) <= thresholdPx;
-                          });
-
-                          if (allSamePoint) {
-                            const ids = leaves
-                              .map((lf) => lf.properties?.listingId)
-                              .filter(Boolean) as string[];
-                            window.dispatchEvent(
-                              new CustomEvent("map:cluster-pick", {
-                                detail: { ids, lat: clat, lng: clng, openSheet: true },
-                              })
-                            );
-                            return;
-                          }
-                        }
-                      }
-
-                      const base = idxRef.getClusterExpansionZoom(cid);
-                      const desired = Math.min(
-                        Math.max(base + 1, map.getZoom() + 1),
-                        map.getMaxZoom()
-                      );
-                      map.flyTo([clat, clng], desired, {
-                        animate: true,
-                        duration: 0.55,
-                        easeLinearity: 0.4,
-                        noMoveStart: true,
-                      });
-                    }}
-                    highlighted={hoveredClusterId === clusterId}
-                  />
-                );
-              }
-
-              const f = feature as PointFeature<PtProps>;
-              const id = f.properties.listingId;
-
+            if (isClusterFeature(feature)) {
+              const clusterId = Number((feature as any).id);
+              const count = (feature as any).properties.point_count as number;
               return (
-                <ListingMarker
-                  key={`${id}-${idx}`}
-                  f={f}
-                  setMarkerRef={(i: string, ref: L.Marker | null) => {
-                    if (ref) markerRefs.current.set(i, ref);
-                    else markerRefs.current.delete(i);
+                <ClusterMarker
+                  key={`cluster-${clusterId}-${i}`}
+                  clusterId={clusterId}
+                  lat={lat}
+                  lng={lng}
+                  count={count}
+                  onExpand={(cid, clat, clng) => {
+                    const map = mapRef.current as any;
+                    const idxRef = indexRef.current;
+                    if (!map || !idxRef) return;
+                    const base = idxRef.getClusterExpansionZoom(cid);
+                    const desired = Math.min(Math.max(base + 1, map.getZoom() + 1), MAP_MAX_ZOOM);
+                    map.flyTo([clat, clng], desired, {
+                      animate: true, duration: 0.55, easeLinearity: 0.4, noMoveStart: true,
+                    });
                   }}
-                  onSelect={(id2: string) => {
-                    // No popups. Center+zoom via external event if needed,
-                    // but at minimum highlight on direct marker tap.
-                    suppressNextFocusRef.current = true;
-                    onSelect(id2);
-                    window.dispatchEvent(new CustomEvent("map:hover", { detail: { id: id2 } }));
-                  }}
-                  highlighted={hoveredId === id}
+                  highlighted={hoveredClusterId === clusterId}
                 />
               );
-            })}
+            }
+
+            const f = feature as PointFeature<PtProps>;
+            const id = f.properties.listingId;
+            return (
+              <ListingMarker
+                key={`${id}-${i}`}
+                f={f}
+                setMarkerRef={(i2: string, ref: L.Marker | null) => {
+                  if (ref) markerRefs.current.set(i2, ref); else markerRefs.current.delete(i2);
+                }}
+                onSelect={(id2: string) => {
+                  suppressNextFocusRef.current = true;
+                  onSelect(id2);
+                  window.dispatchEvent(new CustomEvent("map:hover", { detail: { id: id2 } }));
+                }}
+                highlighted={hoveredId === id}
+              />
+            );
+          })}
 
           <MapStatusOverlay />
         </MapContainer>

@@ -1,4 +1,3 @@
-// src/components/layout/FiltersBar.tsx
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -6,8 +5,10 @@ import { useUrlFilters } from "@/hooks/useUrlFilters";
 import type { Filters } from "@/lib/filters";
 import { bedsLabel, deriveEffective } from "@/lib/filters";
 import FiltersDialog from "./FiltersDialog";
-import { RotateCcw, SlidersHorizontal, X } from "lucide-react";
+import { Layers, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import { ShareButton } from "@/components/ShareButton";
+// NOTE: if your file is actually MapLayersControl, fix the import path
+import MapLayersDialog from "@/components/LeafletMap/MayLayersControl";
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
@@ -42,18 +43,43 @@ function ClearableChip({
 
 export default function FiltersBar() {
   const { filters: urlFilters, replaceFilters } = useUrlFilters();
-  const [open, setOpen] = useState(false);
+  const [openFilters, setOpenFilters] = useState(false);
+  const [openLayers, setOpenLayers] = useState(false);
   const [chipFilters, setChipFilters] = useState<Filters>(urlFilters);
 
   useEffect(() => setChipFilters(urlFilters), [urlFilters]);
 
-  const handleReset = () => {
-    const { enforcedType } = deriveEffective(chipFilters);
-    const reset: Filters = { type: enforcedType };
-    replaceFilters(reset);
-    window.scrollTo({ top: 0, behavior: "auto" });
-    window.dispatchEvent(new Event("map:resetViewport"));
-  };
+  // 🔧 Reset: clear all query params, keep only type (sale/rent), then hard reload
+// inside FiltersBar
+const handleReset = () => {
+  // 1) Keep only the listing type (sale/rent) as the single surviving param
+  const { enforcedType } = deriveEffective(chipFilters);
+
+  // Rewrite the URL in-place (no reload, no extra history entry)
+  try {
+    const url = new URL(window.location.href);
+    url.search = ""; // clear all params
+    if (enforcedType) url.searchParams.set("type", enforcedType);
+    window.history.replaceState(null, "", url.toString());
+  } catch {
+    /* ignore */
+  }
+
+  // 2) Reset filter state everywhere (URL hook + local chips)
+  const reset: Filters = { type: enforcedType };
+  replaceFilters(reset);
+  setChipFilters(reset);
+
+  // 3) Tell the map/UI to reset viewport & re-query visible stuff
+  window.dispatchEvent(new Event("map:resetViewport"));   // your map should center/zoom to default on this
+  window.dispatchEvent(new Event("map:requery-visible")); // re-evaluate layers/visibility if you use this event
+
+  // Optional: clear any selected listing, etc., if you broadcast such events elsewhere
+  // window.dispatchEvent(new Event("map:clear-selection"));
+
+  // Scroll to top for good measure
+  window.scrollTo({ top: 0, behavior: "auto" });
+};
 
   const chipNodes = useMemo(() => {
     const {
@@ -104,9 +130,7 @@ export default function FiltersBar() {
     });
 
     // Type
-    chips.push(
-      <Chip key="type">{enforcedType === "sale" ? "For Sale" : "To Rent"}</Chip>
-    );
+    chips.push(<Chip key="type">{enforcedType === "sale" ? "For Sale" : "To Rent"}</Chip>);
 
     // Sources
     const sources = chipFilters.sources ?? [];
@@ -159,8 +183,7 @@ export default function FiltersBar() {
       const fmt = (n?: number) => (n != null ? `€${n.toLocaleString()}` : "Any");
       chips.push(
         <Chip key="price">
-          Price{isRent ? " (pm)" : ""}:{" "}
-          {chipFilters.priceMin != null ? fmt(priceMinEff) : "Any"}–
+          Price{isRent ? " (pm)" : ""}: {chipFilters.priceMin != null ? fmt(priceMinEff) : "Any"}–
           {chipFilters.priceMax != null ? fmt(priceMaxEff) : "Any"}
         </Chip>
       );
@@ -207,45 +230,51 @@ export default function FiltersBar() {
         {/* Buttons */}
         <div className="ml-auto flex items-center gap-2 shrink-0">
           <ShareButton />
-
+          {/* Reset */}
           <button
             type="button"
             onClick={handleReset}
-            className="cursor-pointer inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 hover:bg-white/10 active:scale-[0.995] touch-manipulation"
+            className="cursor-pointer inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/5 px-2.5 py-1.5 text-sm text-slate-100 hover:bg-white/10 transition active:scale-[0.995] touch-manipulation"
             aria-label="Reset filters"
           >
             <RotateCcw className="h-4 w-4" />
-            <span className="hidden xs:inline">Reset</span>
+            <span className="xs:inline">Reset</span>
           </button>
 
+          {/* Layers */}
           <button
             type="button"
-            onClick={() => setOpen(true)}
-            className="cursor-pointer inline-flex items-center gap-2 rounded-md border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 hover:bg-white/10 active:scale-[0.995] touch-manipulation"
+            onClick={() => setOpenLayers(true)}
+            className="cursor-pointer inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/5 px-2.5 py-1.5 text-sm text-slate-100 hover:bg-white/10 transition active:scale-[0.995] touch-manipulation"
+            aria-label="Open map layers"
+          >
+            <Layers className="h-4 w-4" />
+            <span className="xs:inline">Layers</span>
+          </button>
+
+          {/* Filters */}
+          <button
+            type="button"
+            onClick={() => setOpenFilters(true)}
+            className="cursor-pointer inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/5 px-2.5 py-1.5 text-sm text-slate-100 hover:bg-white/10 transition active:scale-[0.995] touch-manipulation"
             aria-label="Open filters"
           >
             <SlidersHorizontal className="h-4 w-4" />
-            <span className="hidden xs:inline">Filters</span>
+            <span className="xs:inline">Filters</span>
           </button>
         </div>
       </div>
 
       <style jsx global>{`
-        .scrollbar-none {
-          scrollbar-width: none;
-        }
-        .scrollbar-none::-webkit-scrollbar {
-          display: none;
-        }
+        .scrollbar-none { scrollbar-width: none; }
+        .scrollbar-none::-webkit-scrollbar { display: none; }
         @media (max-width: 480px) {
-          .touch-manipulation {
-            padding-top: 10px;
-            padding-bottom: 10px;
-          }
+          .touch-manipulation { padding-top: 10px; padding-bottom: 10px; }
         }
       `}</style>
 
-      <FiltersDialog open={open} onClose={() => setOpen(false)} />
+      <FiltersDialog open={openFilters} onClose={() => setOpenFilters(false)} />
+      <MapLayersDialog open={openLayers} onClose={() => setOpenLayers(false)} />
     </>
   );
 }

@@ -4,6 +4,8 @@ import { useMemo } from "react";
 import { Marker } from "react-leaflet";
 import type { Marker as LeafletMarker, DivIcon } from "leaflet";
 import L from "leaflet";
+import { renderToString } from "react-dom/server";
+import ClusterPill from "./pills/ClusterPill";
 
 type Props = {
   clusterId: number;
@@ -22,11 +24,10 @@ export default function ClusterMarker({
   onExpand,
   highlighted,
 }: Props) {
-  const html = `
-    <div class="pm-cluster-outer ${highlighted ? "is-highlighted" : ""}">
-      <div class="pm-cluster-pill">${count}</div>
-    </div>
-  `;
+  const html = useMemo(
+    () => renderToString(<ClusterPill count={count} highlighted={!!highlighted} />),
+    [count, highlighted]
+  );
 
   const icon: DivIcon = useMemo(
     () =>
@@ -34,7 +35,7 @@ export default function ClusterMarker({
         className: "pm-cluster",
         html,
         iconSize: [0, 0],
-        iconAnchor: [0, 0],  // center with transform
+        iconAnchor: [0, 0],  // center with CSS transform
         popupAnchor: [0, -28],
       }),
     [html]
@@ -44,9 +45,7 @@ export default function ClusterMarker({
     <Marker
       position={[lat, lng]}
       icon={icon}
-      eventHandlers={{
-        click: () => onExpand(clusterId, lat, lng),
-      }}
+      eventHandlers={{ click: () => onExpand(clusterId, lat, lng) }}
       ref={(ref) => {
         const _ = ref as unknown as LeafletMarker | null;
       }}

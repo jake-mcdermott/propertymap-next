@@ -55,28 +55,29 @@ function RegionBadge({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** Consistent logo box (smaller footprint) */
 /** Smaller, neutral logo (container will size it) */
 function AgentLogo({ name, logo }: { name: string; logo?: string }) {
-    const initials = name
-      .split(/\s+/).filter(Boolean).slice(0, 2)
-      .map((s) => s[0]?.toUpperCase()).join("");
-    return logo ? (
-      <img
-        src={logo}
-        alt={`${name} logo`}
-        loading="lazy"
-        decoding="async"
-        className="max-h-10 md:max-h-12 w-auto object-contain select-none"
-      />
-    ) : (
-      <span className="text-[14px] md:text-[15px] font-semibold leading-none text-slate-200">
-        {initials}
-      </span>
-    );
-  }
-    
-  
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase())
+    .join("");
+  return logo ? (
+    <img
+      src={logo}
+      alt={`${name} logo`}
+      loading="lazy"
+      decoding="async"
+      className="max-h-10 md:max-h-12 w-auto object-contain select-none"
+    />
+  ) : (
+    <span className="text-[14px] md:text-[15px] font-semibold leading-none text-slate-200">
+      {initials}
+    </span>
+  );
+}
+
 /** Solid interior with subtle border; tighter padding */
 function Card({
   children,
@@ -86,7 +87,12 @@ function Card({
   className?: string;
 }) {
   return (
-    <div className={["rounded-2xl border border-white/10 bg-neutral-900/70 p-4", className].join(" ")}>
+    <div
+      className={[
+        "rounded-2xl border border-white/10 bg-neutral-900/70 p-4",
+        className,
+      ].join(" ")}
+    >
       {children}
     </div>
   );
@@ -113,10 +119,15 @@ export default function AgentsPage() {
           className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(80%_100%_at_50%_0%,rgba(251,146,60,0.10),rgba(234,88,12,0.06),transparent_70%)] blur-[14px]"
         />
         <div className="max-w-6xl mx-auto w-full px-6 pt-14 pb-10 sm:pt-16 sm:pb-12">
-          <p className="text-[11px] tracking-wide text-slate-400/80 mb-2 select-none">Find an agent</p>
-          <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight">Trusted estate agents on PropertyMap</h1>
+          <p className="text-[11px] tracking-wide text-slate-400/80 mb-2 select-none">
+            Find an agent
+          </p>
+          <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight">
+            Trusted estate agents on PropertyMap
+          </h1>
           <p className="mt-3 max-w-2xl text-slate-300 text-base sm:text-lg">
-            Browse agents we partner with. Every profile links directly to the agent&rsquo;s website.
+            Browse agents we partner with. Every profile links directly to the
+            agent&rsquo;s website.
           </p>
         </div>
       </section>
@@ -127,46 +138,59 @@ export default function AgentsPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
             {AGENTS.map((a) => {
               const regions = a.regions.slice(0, MAX_REGIONS);
-              const extra = a.regions.length - regions.length;
 
               return (
-                <Card key={a.name} className={["hover:translate-y-[-1px] transition-transform", CARD_MIN_H].join(" ")}>
-                <div className="grid grid-cols-[28%_1fr] sm:grid-cols-[25%_1fr] gap-3 items-center">
-                    {/* Left: 25% logo column, fully centered */}
+                <Card
+                  key={a.name}
+                  className={[
+                    "hover:translate-y-[-1px] transition-transform",
+                    CARD_MIN_H,
+                  ].join(" ")}
+                >
+                  {/* Keep image left on all sizes */}
+                  <div className="grid grid-cols-[84px_minmax(0,1fr)] md:grid-cols-[110px_minmax(0,1fr)] gap-3 items-center">
+                    {/* Left: logo column */}
                     <div className="flex items-center justify-center h-full py-1">
-                    <AgentLogo name={a.name} logo={a.logo} />
+                      <AgentLogo name={a.name} logo={a.logo} />
                     </div>
 
-                    {/* Right: details column */}
-                    <div className="space-y-1.5">
-                    <h3 className="text-[15px] sm:text-[15.5px] font-medium leading-tight truncate max-w-[29ch]">
+                    {/* Right: details column (must be shrinkable) */}
+                    <div className="space-y-1.5 min-w-0">
+                      {/* Earlier truncation on mobile via a smaller max-width; free on desktop */}
+                      <h3 className="text-[15px] sm:text-[15.5px] font-medium leading-tight truncate max-w-[22ch] sm:max-w-none sm:truncate sm:whitespace-nowrap">
                         {a.name}
-                    </h3>
+                      </h3>
 
-                    <div className="text-sm leading-none">
+                      {/* Website row — allow truncation */}
+                      <div className="text-sm leading-none min-w-0">
                         <Link
-                        href={a.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex max-w-[240px] items-center gap-1 text-sky-300 hover:text-sky-200 underline underline-offset-2 align-middle"
-                        title={a.website}
+                          href={a.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex max-w-full items-center gap-1 text-sky-300 hover:text-sky-200 underline underline-offset-2 align-middle"
+                          title={a.website}
                         >
-                        <ExternalLink className="h-[13px] w-[13px] shrink-0" />
-                        <span className="truncate">{domainOnly(a.website)}</span>
+                          <ExternalLink className="h-[13px] w-[13px] shrink-0" />
+                          <span className="truncate min-w-0">
+                            {domainOnly(a.website)}
+                          </span>
                         </Link>
-                    </div>
+                      </div>
 
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {/* Regions */}
+                      <div className="mt-3 flex flex-wrap items-center gap-1.5">
                         <MapPin className="h-[14px] w-[14px] text-slate-400" />
-                        {a.regions.slice(0, MAX_REGIONS).map((r) => (
-                        <RegionBadge key={r}>{r}</RegionBadge>
+                        {regions.map((r) => (
+                          <RegionBadge key={r}>{r}</RegionBadge>
                         ))}
                         {a.regions.length > MAX_REGIONS && (
-                        <RegionBadge>+{a.regions.length - MAX_REGIONS} more</RegionBadge>
+                          <RegionBadge>
+                            +{a.regions.length - MAX_REGIONS} more
+                          </RegionBadge>
                         )}
+                      </div>
                     </div>
-                    </div>
-                </div>
+                  </div>
                 </Card>
               );
             })}
@@ -180,10 +204,16 @@ export default function AgentsPage() {
             className="pointer-events-none absolute inset-x-0 -top-6 h-16 -z-10 bg-[radial-gradient(60%_80%_at_50%_0%,rgba(251,146,60,0.16),rgba(234,88,12,0.08),transparent_70%)] blur-[14px]"
           />
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">Are you an estate agent?</h2>
+            <h2 className="text-xl sm:text-2xl font-semibold tracking-tight">
+              Are you an estate agent?
+            </h2>
             <p className="mx-auto mt-2 max-w-2xl text-sm sm:text-base text-slate-300">
-              We&rsquo;ll add a <span className="text-slate-100 font-medium">free preview</span> of your properties so you can see exactly
-              how your branding and locations look on the map. I&rsquo;ll reply <span className="text-slate-100 font-medium">personally</span> about compatibility.
+              We&rsquo;ll add a{" "}
+              <span className="text-slate-100 font-medium">free preview</span>{" "}
+              of your properties so you can see exactly how your branding and
+              locations look on the map. I&rsquo;ll reply{" "}
+              <span className="text-slate-100 font-medium">personally</span>{" "}
+              about compatibility.
             </p>
 
             <div className="mt-6">

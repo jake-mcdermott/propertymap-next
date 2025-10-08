@@ -5,9 +5,10 @@ import dynamic from "next/dynamic";
 import type { Listing } from "@/lib/types";
 import { SURFACE, SURFACE_SOFT, HAIRLINE } from "@/lib/ui";
 import FiltersDialog from "@/components/filters/FiltersDialog";
+import MapLayersDialog from "@/components/LeafletMap/MayLayersControl";
 import type { Filters, ListingType } from "@/lib/filters";
 import { useUrlFilters } from "@/hooks/useUrlFilters";
-import { SlidersHorizontal, RotateCcw, Link as LinkIcon, Check } from "lucide-react";
+import { SlidersHorizontal, RotateCcw, Link as LinkIcon, Check, Layers } from "lucide-react";
 import MobileListingDrawer from "@/components/ui/MobileListingDrawer";
 import BottomListSheet from "@/components/ui/BottomListSheet";
 
@@ -78,6 +79,8 @@ export default function MobilePane({
   const [filtersOpenUncontrolled, setFiltersOpenUncontrolled] = useState(false);
   const filtersOpen = mobileFiltersOpen ?? filtersOpenUncontrolled;
   const setFiltersOpen = setMobileFiltersOpen ?? setFiltersOpenUncontrolled;
+
+  const [layersOpen, setLayersOpen] = useState(false);
 
   const [copied, setCopied] = useState(false);
   const { filters, replaceFilters } = useUrlFilters();
@@ -202,6 +205,18 @@ export default function MobilePane({
               <RotateCcw className="h-4 w-4" />
             </IconButton>
 
+            {/* Layers (NEW) */}
+            <button
+              type="button"
+              onClick={() => setLayersOpen(true)}
+              className="cursor-pointer border border-white/15 inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm text-slate-200 bg-white/[0.08] ring-1 ring-white/10 hover:bg-white/[0.12] active:scale-[0.99] transition"
+              aria-haspopup="dialog"
+              aria-expanded={layersOpen}
+            >
+              <Layers className="h-4 w-4 opacity-90" aria-hidden />
+              Layers
+            </button>
+
             {/* Filters LAST so it's at the far right for thumb reach */}
             <button
               type="button"
@@ -253,6 +268,15 @@ export default function MobilePane({
         open={filtersOpen}
         onClose={() => {
           setFiltersOpen(false);
+          requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+        }}
+      />
+
+      {/* Map Layers (NEW) */}
+      <MapLayersDialog
+        open={layersOpen}
+        onClose={() => {
+          setLayersOpen(false);
           requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
         }}
       />
