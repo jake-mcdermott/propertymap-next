@@ -49,37 +49,45 @@ export default function FiltersBar() {
 
   useEffect(() => setChipFilters(urlFilters), [urlFilters]);
 
+  // 👇 Listen for the global "open layers" request (from What's New modal)
+  useEffect(() => {
+    const handler = () => setOpenLayers(true);
+    window.addEventListener("pm:open-layers", handler as EventListener);
+    return () => window.removeEventListener("pm:open-layers", handler as EventListener);
+  }, []);
+
+  // (Optional) allow ?layers=1 to auto-open on load
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("layers") === "1") {
+        setOpenLayers(true);
+        // if you don’t want it to persist in the URL:
+        // url.searchParams.delete("layers");
+        // window.history.replaceState(null, "", url.toString());
+      }
+    } catch {}
+  }, []);
+
   // 🔧 Reset: clear all query params, keep only type (sale/rent), then hard reload
-// inside FiltersBar
-const handleReset = () => {
-  // 1) Keep only the listing type (sale/rent) as the single surviving param
-  const { enforcedType } = deriveEffective(chipFilters);
+  const handleReset = () => {
+    const { enforcedType } = deriveEffective(chipFilters);
 
-  // Rewrite the URL in-place (no reload, no extra history entry)
-  try {
-    const url = new URL(window.location.href);
-    url.search = ""; // clear all params
-    if (enforcedType) url.searchParams.set("type", enforcedType);
-    window.history.replaceState(null, "", url.toString());
-  } catch {
-    /* ignore */
-  }
+    try {
+      const url = new URL(window.location.href);
+      url.search = "";
+      if (enforcedType) url.searchParams.set("type", enforcedType);
+      window.history.replaceState(null, "", url.toString());
+    } catch {}
 
-  // 2) Reset filter state everywhere (URL hook + local chips)
-  const reset: Filters = { type: enforcedType };
-  replaceFilters(reset);
-  setChipFilters(reset);
+    const reset: Filters = { type: enforcedType };
+    replaceFilters(reset);
+    setChipFilters(reset);
 
-  // 3) Tell the map/UI to reset viewport & re-query visible stuff
-  window.dispatchEvent(new Event("map:resetViewport"));   // your map should center/zoom to default on this
-  window.dispatchEvent(new Event("map:requery-visible")); // re-evaluate layers/visibility if you use this event
-
-  // Optional: clear any selected listing, etc., if you broadcast such events elsewhere
-  // window.dispatchEvent(new Event("map:clear-selection"));
-
-  // Scroll to top for good measure
-  window.scrollTo({ top: 0, behavior: "auto" });
-};
+    window.dispatchEvent(new Event("map:resetViewport"));
+    window.dispatchEvent(new Event("map:requery-visible"));
+    window.scrollTo({ top: 0, behavior: "auto" });
+  };
 
   const chipNodes = useMemo(() => {
     const {
@@ -95,7 +103,6 @@ const handleReset = () => {
 
     const chips: React.ReactNode[] = [];
 
-    // Counties
     const counties = chipFilters.counties ?? [];
     counties.forEach((c) => {
       chips.push(
@@ -112,7 +119,6 @@ const handleReset = () => {
       );
     });
 
-    // Towns
     const towns = chipFilters.towns ?? [];
     towns.forEach((t) => {
       chips.push(
@@ -129,10 +135,8 @@ const handleReset = () => {
       );
     });
 
-    // Type
     chips.push(<Chip key="type">{enforcedType === "sale" ? "For Sale" : "To Rent"}</Chip>);
 
-    // Sources
     const sources = chipFilters.sources ?? [];
     sources.forEach((s) => {
       chips.push(
@@ -149,7 +153,6 @@ const handleReset = () => {
       );
     });
 
-    // Kind
     if (chipFilters.kind) {
       const label = chipFilters.kind[0].toUpperCase() + chipFilters.kind.slice(1);
       chips.push(
@@ -166,7 +169,6 @@ const handleReset = () => {
       );
     }
 
-    // Beds
     const showBeds = chipFilters.bedsMin != null || chipFilters.bedsMax != null;
     if (showBeds) {
       chips.push(
@@ -177,7 +179,6 @@ const handleReset = () => {
       );
     }
 
-    // Price
     const showPrice = chipFilters.priceMin != null || chipFilters.priceMax != null;
     if (showPrice) {
       const fmt = (n?: number) => (n != null ? `€${n.toLocaleString()}` : "Any");
@@ -189,7 +190,6 @@ const handleReset = () => {
       );
     }
 
-    // Size (m²)
     const showSqm = chipFilters.sqmMin != null || chipFilters.sqmMax != null;
     if (showSqm) {
       const fmt = (n?: number) => (n != null ? `${n} m²` : "Any");

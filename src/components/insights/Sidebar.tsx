@@ -1,4 +1,3 @@
-// components/insights/Sidebar.tsx
 "use client";
 
 import React, { useMemo, useState } from "react";
@@ -20,6 +19,10 @@ type Props = {
   // trimming control
   trimEnabled?: boolean;
   setTrimEnabled?: React.Dispatch<React.SetStateAction<boolean>>;
+
+  // NEW: NI toggle surfaced in the sidebar
+  includeNI?: boolean;
+  setIncludeNI?: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
 export default function InsightsSidebar({
@@ -34,6 +37,8 @@ export default function InsightsSidebar({
   error,
   trimEnabled = false,
   setTrimEnabled,
+  includeNI = false,
+  setIncludeNI,
 }: Props) {
   const [countyQuery, setCountyQuery] = useState("");
   const [copied, setCopied] = useState(false);
@@ -92,7 +97,7 @@ export default function InsightsSidebar({
         </div>
       </div>
 
-      {/* Normalization / Trimming (inline checkbox + label) */}
+      {/* Normalization / Trimming */}
       <div className="px-4 py-3 border-b border-neutral-800">
         <label className="w-full flex items-center gap-3 cursor-pointer">
           <input
@@ -103,6 +108,22 @@ export default function InsightsSidebar({
           />
           <span className="text-sm text-neutral-100">Trim top & bottom 5%</span>
         </label>
+      </div>
+
+      {/* NEW: Include NI */}
+      <div className="px-4 py-3 border-b border-neutral-800">
+        <label className="w-full flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={!!includeNI}
+            onChange={() => setIncludeNI && setIncludeNI((v) => !v)}
+            className="h-4 w-4 rounded border-neutral-600 accent-[#01677c] focus:ring-neutral-500"
+          />
+        <span className="text-sm text-neutral-100">Include Northern Ireland</span>
+        </label>
+        <p className="mt-1 text-[11px] text-neutral-500">
+          NI values are shown in €
+        </p>
       </div>
 
       {/* Counties accordion */}
@@ -217,7 +238,7 @@ export default function InsightsSidebar({
             ) : (
               <>
                 <Check className="h-4 w-4" />
-                Ready{trimEnabled ? " • Trim 5%" : ""}
+                Ready{trimEnabled ? " • Trim 5%" : ""}{includeNI ? " • NI On" : ""}
               </>
             )}
           </div>

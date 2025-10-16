@@ -1,4 +1,3 @@
-// src/app/insights/InsightsClient.tsx
 "use client";
 
 import React from "react";
@@ -24,6 +23,7 @@ import {
   ArrowUpWideNarrow,
   Layers,
   Ruler,
+  Info,
 } from "lucide-react";
 
 import { collection, getDocs } from "firebase/firestore";
@@ -40,6 +40,7 @@ import {
 
 import { type ManifestInfo } from "@/lib/fetchManifestClient";
 import { fetchManifestCached } from "@/lib/fetchManifestCache";
+import type { FeatureCollection } from "geojson";
 
 const RoutingMap = dynamic(() => import("./RoutingMap"), { ssr: false });
 
@@ -111,15 +112,24 @@ type RawListing = {
   [k: string]: any;
 };
 
+type NiCountyStat = {
+  county: string;
+  countySlug: string;
+  totalListings: number;
+  avgPriceGBP: number | null;
+  medianPriceGBP: number | null;
+  // optional fields that may or may not exist in stats; we no longer rely on them for min/max
+  minPriceGBP?: number | null;
+  maxPriceGBP?: number | null;
+  countsByType?: { Apartment?: number; House?: number };
+};
+
 const medianListing = (rows: LiveRow[]): LiveRow | null => {
   if (!rows.length) return null;
   const sorted = [...rows].sort((a, b) => a.price - b.price);
   const mid = Math.floor((sorted.length - 1) / 2);
   return sorted[mid];
 };
-
-const normCounty = (s?: string | null) =>
-  (s || "").replace(/^\s*(?:co\.?|county)\s+/i, "").trim();
 
 const rkOf = (eir?: string | null) =>
   typeof eir === "string" && eir.length >= 3 ? eir.slice(0, 3).toUpperCase() : null;
@@ -180,6 +190,150 @@ const extractTown = (x: any): string => {
   return "";
 };
 
+/* ======================= NI helpers ======================= */
+const normalizeCountyName = (s?: string | null) => {
+  let v = (s ?? "").trim().toLowerCase();
+  v = v.replace(/^county\s+/i, "");
+  v = v.replace(/[()]/g, "");
+  v = v.replace(/\s*\/\s*/g, " ");
+  v = v.replace(/\s*-\s*/g, " ");
+  v = v.replace(/\s+/g, " ");
+  if (/\bderry\b/.test(v)) v = "londonderry";
+  return v;
+};
+const titleizeCountyNI = (s: string) => s.replace(/\b\w/g, (m) => m.toUpperCase());
+function countyNameFromProps(p: Record<string, any>): string {
+  const direct =
+    p.COUNTY_NAME ??
+    p.CountyName ??
+    p.NAME ??
+    p.County ??
+    p.county ??
+    p.admin_name ??
+    p.AdminName ??
+    null;
+  if (direct) return String(direct);
+  for (const [k, v] of Object.entries(p)) {
+    if (/county/i.test(k) && v != null && String(v).trim()) return String(v);
+  }
+  return "";
+}
+/* ========================================================= */
+
+function weightedMedianNumber(pairs: Array<{ value: number; weight: number }>): number | null {
+  const arr = pairs
+    .filter((p) => Number.isFinite(p.value) && p.weight > 0)
+    .sort((a, b) => a.value - b.value);
+  const total = arr.reduce((a, p) => a + p.weight, 0);
+  if (total <= 0 || !arr.length) return null;
+  let acc = 0;
+  for (const p of arr) {
+    acc += p.weight;
+    if (acc >= total / 2) return p.value;
+  }
+  return arr[arr.length - 1].value;
+}
+
+type NiKpis = {
+  totalListings: number;
+  avgGBP: number | null;
+  avgEUR: number | null;
+  medianGBP: number | null;
+  medianEUR: number | null;
+  /** NEW: true min / max listing prices (not averages) pulled from NI listing documents */
+  minGBP: number | null;
+  minEUR: number | null;
+  maxGBP: number | null;
+  maxEUR: number | null;
+};
+
+/** Info icon with simple title tooltip */
+function InfoHover({ title }: { title: string | undefined }) {
+  if (!title) return null;
+  return (
+    <span className="inline-flex items-center align-middle ml-1" title={title}>
+      <Info className="h-3.5 w-3.5 text-neutral-400 hover:text-neutral-200" />
+    </span>
+  );
+}
+
+/** Try to pull NI listing prices directly from Firestore (for true min/max listing price). */
+async function fetchNiListingExtremesGBP(): Promise<{ minGBP: number | null; maxGBP: number | null; sample: number }> {
+  // Likely NI collections first; add a few common variants for safety
+  const candidateCollections = [
+    "ni_listings",
+    "ni-map-listings",
+    "ni_raw_listings",
+    "niListings",
+    "map-listings-ni",
+    // fallback to a general pool (will post-filter to NI; only used if others empty)
+    "map-listings",
+    "listings",
+  ];
+
+  const isNiDoc = (d: any) => {
+    const v =
+      d?.country ??
+      d?.region ??
+      d?.jurisdiction ??
+      d?.countryCode ??
+      d?.country_code ??
+      d?.country_name ??
+      "";
+    const s = String(v).toLowerCase();
+    return /northern\s*ireland|^ni$|gb-?nir|ulster/.test(s);
+  };
+
+  const getPriceGBP = (d: any): number | null => {
+    const candidates = [
+      d?.priceGBP, d?.price_gbp, d?.askingPriceGBP, d?.asking_price_gbp,
+      // sometimes price already stored in GBP as "price"
+      d?.price, d?.askingPrice, d?.asking_price,
+    ];
+    for (const c of candidates) {
+      const n = Number(c);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+  };
+
+  for (const name of candidateCollections) {
+    try {
+      const snap = await getDocs(collection(db, name));
+      if (snap.empty) continue;
+
+      let min: number | null = null;
+      let max: number | null = null;
+      let count = 0;
+
+      snap.forEach((doc) => {
+        const d = doc.data();
+        // If we're reading a general collection, only accept NI docs
+        if ((name === "map-listings" || name === "listings") && !isNiDoc(d)) return;
+
+        // Skip rentals if type is available and says "rent"
+        if (String(d?.type || "").toLowerCase() === "rent") return;
+
+        const gbp = getPriceGBP(d);
+        if (gbp == null) return;
+
+        count += 1;
+        if (min == null || gbp < min) min = gbp;
+        if (max == null || gbp > max) max = gbp;
+      });
+
+      if (count > 0 && (min != null || max != null)) {
+        return { minGBP: min ?? null, maxGBP: max ?? null, sample: count };
+      }
+      // else try next collection
+    } catch {
+      // swallow and try next candidate
+    }
+  }
+
+  return { minGBP: null, maxGBP: null, sample: 0 };
+}
+
 export default function InsightsClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -218,6 +372,16 @@ export default function InsightsClient() {
   const [manifest, setManifest] = React.useState<ManifestInfo | null>(null);
 
   const [mapMetric, setMapMetric] = React.useState<MapMetric>("price");
+
+  // NI overlay + KPIs
+  const [includeNI, setIncludeNI] = React.useState<boolean>(true);
+  const [niFx, setNiFx] = React.useState<number>(1.15); // GBP→EUR
+  const [niOverlayFC, setNiOverlayFC] = React.useState<FeatureCollection | null>(null);
+  const [niExtraValues, setNiExtraValues] = React.useState<number[]>([]);
+  const [niLoading, setNiLoading] = React.useState<boolean>(false);
+  const [niErr, setNiErr] = React.useState<string>("");
+
+  const [niKpis, setNiKpis] = React.useState<NiKpis | null>(null);
 
   const isBusy = loading || liveLoading;
 
@@ -269,18 +433,21 @@ export default function InsightsClient() {
     sublabel,
     icon: Icon,
     loading,
+    infoTitle,
   }: {
     label: string;
     value: React.ReactNode;
     sublabel?: React.ReactNode;
     icon?: React.ComponentType<{ size?: number; className?: string }>;
     loading?: boolean;
+    infoTitle?: string;
   }) {
     return (
       <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
         <div className="flex items-center justify-between">
           <div className="text-[11px] uppercase tracking-wide text-neutral-400">
             {label}
+            <InfoHover title={infoTitle} />
           </div>
           {Icon ? <Icon size={16} className="text-neutral-500/70" /> : null}
         </div>
@@ -302,7 +469,7 @@ export default function InsightsClient() {
     );
   }
 
-  // ------------------- Fetch + Eircode-first scoping -------------------
+  // ------------------- Fetch + Eircode-first scoping (ROI) -------------------
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -444,7 +611,7 @@ export default function InsightsClient() {
     return { min, max };
   }, [liveRows]);
 
-  // €/m² (weighted by size) – ONLY sizeSqm in sane bounds is considered
+  // €/m²
   const sqmMetrics = React.useMemo(() => {
     let sumPrice = 0;
     let sumSize = 0;
@@ -463,7 +630,7 @@ export default function InsightsClient() {
     return { weightedAvgEurPerSqm, sample };
   }, [pricedBase]);
 
-  // --- Build € / m² rows per RK from the RK-scoped priced base ---
+  // --- Build € / m² rows per RK ---
   type MapRow = { rk: string; county: string | null; avg: number; count: number };
   const rkEurPerSqmRows: MapRow[] = React.useMemo(() => {
     const countyByRK = new Map<string, string | null>();
@@ -497,7 +664,7 @@ export default function InsightsClient() {
     return out;
   }, [pricedBase, avgRows]);
 
-  // Towns by avg price (desc) — require ≥ TOWN_MIN_SAMPLE
+  // Towns table
   type TownRow = { town: string; county: string | null; avg: number; count: number };
   const [townExpanded, setTownExpanded] = React.useState(false);
   const townsRows = React.useMemo(() => {
@@ -543,12 +710,122 @@ export default function InsightsClient() {
     return `Last updated ${d.toLocaleDateString("en-IE", { year: "numeric", month: "short", day: "2-digit" })} ${d.toLocaleTimeString("en-IE", { hour: "2-digit", minute: "2-digit" })}`;
   }, [manifest?.updatedAt]);
 
-  // Rows + formatting for the map based on toggle
+  // Rows for the map
   const mapRows = mapMetric === "price" ? avgRows : rkEurPerSqmRows;
+
+  // ---- NI overlay fetch/join + KPIs (Price only) ----
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!includeNI || mapMetric !== "price") {
+        setNiOverlayFC(null);
+        setNiExtraValues([]);
+        setNiKpis(null);
+        return;
+      }
+      setNiLoading(true);
+      setNiErr("");
+
+      try {
+        // County-level stats (for avg/median + overlay)
+        const snap = await getDocs(collection(db, "ni_county_stats"));
+        if (cancelled) return;
+        const rows: NiCountyStat[] = [];
+        snap.forEach((d) => rows.push(d.data() as NiCountyStat));
+
+        const byCounty = new Map<string, { avgEur: number | null; cnt: number }>();
+        const extras: number[] = [];
+        const valueWeightPairsAvg: Array<{ value: number; weight: number }> = [];
+        const valueWeightPairsMed: Array<{ value: number; weight: number }> = [];
+
+        let totalListings = 0;
+        let sumWeightedAvgGBP = 0;
+
+        for (const r of rows) {
+          const key = normalizeCountyName(r.county);
+          const cnt = Number(r.totalListings || 0);
+          const avgGBP = (r.avgPriceGBP ?? null) != null ? Number(r.avgPriceGBP) : null;
+          const medGBP = (r.medianPriceGBP ?? null) != null ? Number(r.medianPriceGBP) : null;
+
+          totalListings += cnt;
+
+          if (avgGBP != null && Number.isFinite(avgGBP)) {
+            sumWeightedAvgGBP += avgGBP * cnt;
+            valueWeightPairsAvg.push({ value: avgGBP, weight: Math.max(1, cnt) });
+          }
+          if (medGBP != null && Number.isFinite(medGBP)) {
+            valueWeightPairsMed.push({ value: medGBP, weight: Math.max(1, cnt) });
+          }
+
+          const avgEur = avgGBP != null ? avgGBP * niFx : null;
+          byCounty.set(key, { avgEur, cnt });
+          if (avgEur != null && Number.isFinite(avgEur)) extras.push(avgEur);
+        }
+
+        const avgGBP =
+          totalListings > 0 && sumWeightedAvgGBP > 0 ? sumWeightedAvgGBP / totalListings : null;
+        const medGBP =
+          weightedMedianNumber(valueWeightPairsMed) ??
+          weightedMedianNumber(valueWeightPairsAvg) ??
+          null;
+
+        // >>> NEW: get true min/max from NI listing documents <<<
+        const { minGBP, maxGBP } = await fetchNiListingExtremesGBP();
+
+        const kpis: NiKpis = {
+          totalListings,
+          avgGBP,
+          avgEUR: avgGBP != null ? avgGBP * niFx : null,
+          medianGBP: medGBP,
+          medianEUR: medGBP != null ? medGBP * niFx : null,
+          minGBP,
+          minEUR: minGBP != null ? minGBP * niFx : null,
+          maxGBP,
+          maxEUR: maxGBP != null ? maxGBP * niFx : null,
+        };
+        if (!cancelled) setNiKpis(kpis);
+
+        // GeoJSON overlay
+        const res = await fetch("/data/ni_counties2.geojson");
+        if (!res.ok) throw new Error("Failed to load NI counties GeoJSON");
+        const gj = (await res.json()) as FeatureCollection;
+
+        const joined = gj.features.map((f) => {
+          const p = (f.properties ?? {}) as Record<string, any>;
+          const raw = countyNameFromProps(p);
+          const key = normalizeCountyName(raw);
+          const stat = byCounty.get(key);
+          return {
+            ...f,
+            properties: {
+              ...p,
+              __county: raw || titleizeCountyNI(key),
+              __avg: stat?.avgEur ?? null,
+              __cnt: stat?.cnt ?? null,
+            },
+          };
+        });
+
+        if (cancelled) return;
+        setNiOverlayFC({ type: "FeatureCollection", features: joined });
+        setNiExtraValues(extras);
+      } catch (e: any) {
+        if (!cancelled) {
+          setNiErr(e?.message || "Failed to build NI overlay");
+          setNiKpis(null);
+        }
+      } finally {
+        if (!cancelled) setNiLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [includeNI, niFx, mapMetric]);
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 md:gap-6">
-      {/* ORANGE TOP LOADER — shows only when isBusy === true */}
+      {/* ORANGE TOP LOADER */}
       <div
         className={`fixed left-0 right-0 top-0 h-[3px] z-[9999] transition-opacity duration-200 ${isBusy ? "opacity-100" : "opacity-0"}`}
         aria-hidden={!isBusy}
@@ -580,6 +857,8 @@ export default function InsightsClient() {
             error={err || liveErr}
             trimEnabled={trimEnabled}
             setTrimEnabled={setTrimEnabled}
+            includeNI={includeNI}
+            setIncludeNI={setIncludeNI}
           />
         </div>
       </div>
@@ -590,6 +869,7 @@ export default function InsightsClient() {
           <div className="text-xs text-neutral-400 flex-1 truncate">
             {selectedCounties.length ? selectedCounties.join(", ") : "No counties selected"}
             {trimEnabled ? " • Trim 5%" : ""}
+            {includeNI ? " • NI On" : ""}
           </div>
 
           <Sheet>
@@ -640,15 +920,17 @@ export default function InsightsClient() {
                   error={err || liveErr}
                   trimEnabled={trimEnabled}
                   setTrimEnabled={setTrimEnabled}
+                  includeNI={includeNI}
+                  setIncludeNI={setIncludeNI}
                 />
               </div>
 
               <div
                 className="border-t border-neutral-800 bg-neutral-900/95 backdrop-blur px-3"
                 style={{
-                  paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
-                  paddingTop: "10px",
-                }}
+                    paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+                    paddingTop: "10px",
+                  }}
               >
                 <SheetClose asChild>
                   <Button className="w-full h-11 font-medium text-white bg-[#f97316] hover:bg-[#fb923c] active:bg-[#ea580c] focus:outline-none focus:ring-2 focus:ring-offset-0 focus:ring-[#fb923c]/50 transition">
@@ -663,7 +945,7 @@ export default function InsightsClient() {
 
       {/* Main */}
       <main className="flex-1 min-w-0">
-        {/* KPIs */}
+        {/* KPIs (ROI) */}
         <section className="grid grid-cols-2 md:grid-cols-6 gap-3 md:gap-4">
           <KPICard
             label="Average Prop. Price"
@@ -703,10 +985,34 @@ export default function InsightsClient() {
           />
         </section>
 
+        {/* NI KPIs (second row) — min/max are TRUE listing extremes */}
+        {includeNI && (
+          <section className="mt-3 grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4">
+            <KPICard
+              label="NI • Average Price"
+              value={fmt(niKpis?.avgEUR ?? null)}
+              icon={LineChart}
+              loading={niLoading}
+              sublabel={niErr ? <span className="text-red-400">{niErr}</span> : undefined}
+            />
+            <KPICard
+              label="NI • Median Price"
+              value={fmt(niKpis?.medianEUR ?? null)}
+              icon={TrendingUp}
+              loading={niLoading}
+            />
+            <KPICard
+              label="NI • Total Listings"
+              value={niKpis ? numFmt(niKpis.totalListings) : "—"}
+              icon={Layers}
+              loading={niLoading}
+            />
+          </section>
+        )}
+
         {/* Map */}
         <section className="mt-6 md:mt-8 rounded-xl border border-neutral-800 bg-neutral-900 p-3 md:p-4">
           <div className="flex items-center justify-between mb-2">
-            {/* LEFT: title + last updated on mobile */}
             <div className="flex flex-col">
               <h2 className="text-sm font-semibold">
                 {mapMetric === "price"
@@ -720,7 +1026,7 @@ export default function InsightsClient() {
               )}
             </div>
 
-            {/* RIGHT: scannable actions row; keeps lastUpdated inline on ≥sm */}
+            {/* RIGHT actions */}
             <div className="flex items-center gap-2 min-w-0 flex-nowrap overflow-x-auto pr-[max(env(safe-area-inset-right),0.75rem)] -mr-2">
               {!isBusy && !err ? (
                 <div className="flex items-center gap-3 text-xs shrink-0">
@@ -732,7 +1038,7 @@ export default function InsightsClient() {
                 </div>
               ) : null}
 
-              {/* Toggle */}
+              {/* ROI metric toggle */}
               <div className="ml-2 inline-flex rounded-md border border-neutral-700 overflow-hidden shrink-0">
                 <button
                   type="button"
@@ -757,14 +1063,35 @@ export default function InsightsClient() {
                   €/m²
                 </button>
               </div>
+
+              {/* NI toggle above the map was removed */}
             </div>
           </div>
 
           <RoutingMap
-            rows={(mapMetric === "price" ? avgRows : rkEurPerSqmRows) as any}
+            rows={(mapMetric === "price" ? avgRows : (rkEurPerSqmRows as any))}
             valueLabel={mapMetric === "price" ? "Avg Price" : "Avg €/m²"}
             valueFmt={mapMetric === "price" ? fmt : eurPerSqmFmt}
+            // NI overlay when sidebar toggle is ON:
+            extraValues={includeNI && mapMetric === "price" ? niExtraValues : undefined}
+            niOverlay={includeNI && mapMetric === "price" ? niOverlayFC : null}
+            niOverlayLabel="NI County Avg Price"
+            niOverlayFmt={fmt}
           />
+
+          {includeNI && mapMetric === "price" && (
+            <div className="mt-2 text-[11px]">
+              {niLoading ? (
+                <span className="text-neutral-400">Loading NI overlay…</span>
+              ) : niErr ? (
+                <span className="text-red-400">NI overlay: {niErr}</span>
+              ) : niOverlayFC ? (
+                <span className="text-neutral-500">NI overlay ready</span>
+              ) : (
+                <span className="text-neutral-500">NI overlay off</span>
+              )}
+            </div>
+          )}
         </section>
 
         {/* Routing Keys table */}
@@ -822,7 +1149,7 @@ export default function InsightsClient() {
           )}
         </section>
 
-        {/* Towns by Average Price (desc) */}
+        {/* Towns table */}
         <section className="mt-6 md:mt-8 rounded-xl border border-neutral-800 bg-neutral-900">
           <div className="px-4 py-3 border-b border-neutral-800 flex items-center justify-between">
             <h2 className="text-sm font-semibold">

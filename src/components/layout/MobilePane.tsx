@@ -191,6 +191,33 @@ export default function MobilePane({
     requestAnimationFrame(() => window.dispatchEvent(new Event("map:requery-visible")));
   };
 
+  // Auto-open Layers when a global event is fired (e.g., from the What's New modal)
+  useEffect(() => {
+    const handler = () => {
+      setMobileView("map");
+      setLayersOpen(true);
+      // give the map/layout a tick to recalc sizes
+      requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+    };
+    window.addEventListener("pm:open-layers", handler as EventListener);
+    return () => window.removeEventListener("pm:open-layers", handler as EventListener);
+  }, [setMobileView]);
+
+  // (Optional) support ?layers=1 to open on load/share links
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("layers") === "1") {
+        setMobileView("map");
+        setLayersOpen(true);
+        requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+        // If you don't want the param to persist:
+        // url.searchParams.delete("layers");
+        // window.history.replaceState(null, "", url.toString());
+      }
+    } catch {/* noop */}
+  }, [setMobileView]);
+
   return (
     <section className="md:hidden flex-1 min-h-0 flex flex-col">
       {/* Header */}

@@ -215,7 +215,7 @@ export default function MapLayersDialog({
             <RowToggle
               icon={<ShoppingCart className="h-4 w-4" />}
               label="Supermarkets"
-              sub="Tesco, Aldi & SuperValu stores (more chains in progress)"
+              sub="Tesco, Aldi & SuperValu stores"
               checked={supermarkets}
               onChange={setSupermarkets}
             />

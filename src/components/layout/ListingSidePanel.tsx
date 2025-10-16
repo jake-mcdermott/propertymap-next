@@ -15,7 +15,6 @@ import {
   ExternalLink,
 } from "lucide-react";
 import type { Listing } from "@/lib/types";
-import { ShareButton } from "@/components/ShareButton";
 
 /* ------------------------- tiny helpers ------------------------- */
 function formatPrice(price?: number | null) {
@@ -45,9 +44,10 @@ function typeLabel(listing?: Listing | null) {
   return k.charAt(0).toUpperCase() + k.slice(1).toLowerCase();
 }
 
-/* -------------------- sources (brand buttons) ------------------- */
+/* ======================= Sources (uniform white chips, per-brand logo) ======================= */
 type SourceItem = { name?: string; url: string };
 
+// Detect a brand from URL host
 function brandFromUrl(url: string): string {
   try {
     const host = new URL(url).host.replace(/^www\./i, "").toLowerCase();
@@ -58,12 +58,15 @@ function brandFromUrl(url: string): string {
     if (host.includes("westcorkproperty")) return "westcorkproperty";
     if (host.includes("michelleburke")) return "michelleburke";
     if (host.includes("zoopla")) return "zoopla";
-    if (host.includes("propertymap") || host.includes("findqo")) return "findqo";
+    if (host.includes("propertymap") || host.includes("findqo")) return "propertymap";
+    if (host.includes("google")) return "googlemaps";
     return "generic";
   } catch {
     return "generic";
   }
 }
+
+// Human labels
 function prettyName(brand: string): string {
   switch (brand) {
     case "myhome": return "MyHome";
@@ -73,22 +76,30 @@ function prettyName(brand: string): string {
     case "westcorkproperty": return "James Lyon O'Keefe";
     case "michelleburke": return "Michelle Burke";
     case "zoopla": return "Zoopla";
-    case "findqo": return "PropertyMap";
+    case "propertymap": return "PropertyMap";
+    case "googlemaps": return "Google Maps";
     default: return "Source";
   }
 }
-const logoPath = (brand: string) => `/logos/${brand}.png`;
 
-function SourceButton({
-  item,
-  prominent = false,
-}: {
-  item: SourceItem;
-  prominent?: boolean;
-}) {
+// Strictly use project assets in /public/logos/*.png
+const BRAND_LOGO: Record<string, string> = {
+  myhome: "/logos/myhome.png",
+  daft: "/logos/daft.png",
+  sherryfitz: "/logos/sherryfitz.png",
+  dng: "/logos/dng.png",
+  westcorkproperty: "/logos/westcorkproperty.png",
+  michelleburke: "/logos/michelleburke.png",
+  zoopla: "/logos/zoopla.png",
+  propertymap: "/logos/propertymap.png",
+  googlemaps: "/logos/googlemaps.png", // add this to public/logos
+  generic: "/logos/generic.png",       // and a neutral fallback
+};
+
+function SourceChip({ item }: { item: SourceItem }) {
   const brand = brandFromUrl(item.url);
-  const [src, setSrc] = useState(logoPath(brand));
-  const label = item.name?.trim() || prettyName(brand);
+  const label = (item.name?.trim() || prettyName(brand)) || "Source";
+  const [src, setSrc] = useState(BRAND_LOGO[brand] || BRAND_LOGO.generic);
 
   return (
     <a
@@ -96,35 +107,37 @@ function SourceButton({
       target="_blank"
       rel="noreferrer"
       title={label}
-      className={[
-        "group relative flex items-center gap-3 rounded-xl px-3 py-2 no-underline text-white transition",
-        "border bg-white/[0.04] border-white/10 hover:bg-white/[0.08] hover:border-white/20",
-        prominent ? "ring-1 ring-white/15" : "",
-      ].join(" ")}
       onClick={(e) => e.stopPropagation()}
+      className={[
+        "group relative flex items-center gap-3 rounded-2xl no-underline",
+        "px-3 py-2.5 border border-slate-200/80 bg-white text-slate-900",
+        "shadow-sm hover:shadow-md hover:bg-slate-50 transition",
+        "focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300",
+      ].join(" ")}
     >
-      {/* logo */}
+      {/* brand logo (transparent PNGs in /public/logos) */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
+        width={18}
+        height={18}
         alt=""
-        width={20}
-        height={20}
-        className="h-5 w-5 rounded-[4px] object-contain bg-white"
-        onError={() => { if (src !== logoPath("generic")) setSrc(logoPath("generic")); }}
+        className="h-[18px] w-[18px] object-contain"
+        onError={() => setSrc(BRAND_LOGO.generic)}
         loading="lazy"
       />
-      {/* name */}
-      <span className="flex-1 truncate text-[13.5px] font-medium">{label}</span>
-      {/* external icon */}
-      <ExternalLink className="h-4 w-4 opacity-70 transition group-hover:opacity-100" />
-      {/* subtle glow on hover */}
-      <span className="pointer-events-none absolute inset-0 rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.25)] opacity-0 group-hover:opacity-100 transition"></span>
+
+      {/* label only — no URL/host/path */}
+      <span className="flex-1 truncate text-[13.5px] font-semibold leading-tight">
+        {label}
+      </span>
+
+      <ExternalLink className="h-4.5 w-4.5 text-slate-500 group-hover:text-slate-700 transition" />
     </a>
   );
 }
 
-/* ------------------- minimalist spec item ------------------- */
+/* ======================= minimalist spec items ======================= */
 function SpecItem({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div className="flex items-center gap-2 text-[13px] text-slate-200">
@@ -138,13 +151,13 @@ function SpecItem({ icon, label }: { icon: React.ReactNode; label: string }) {
 
 /* ------------------- light section chrome ------------------- */
 function SectionHeader({ children }: { children: React.ReactNode }) {
-    return (
-      <div className="text-[11px] uppercase tracking-wide text-white/55">
-        {children}
-      </div>
-    );
-  }
-  function Divider() {
+  return (
+    <div className="text-[11px] uppercase tracking-wide text-white/55">
+      {children}
+    </div>
+  );
+}
+function Divider() {
   return (
     <div className="relative -mx-4 sm:-mx-5 h-px">
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/12 to-transparent" />
@@ -181,19 +194,22 @@ export default function ListingSidePanel({
   const isApt = (listing as any)?.kind === "apartment";
 
   const sources: SourceItem[] = useMemo(() => {
-    if (!listing?.sources || !Array.isArray(listing.sources)) return [];
-    // Make first item “prominent”: prefer listing.url if present
-    const primary = (listing as any)?.url
-      ? [{ name: undefined, url: (listing as any).url as string }]
+    if (!listing) return [];
+    const fromListingUrl: SourceItem[] = (listing as any)?.url ? [{ url: (listing as any).url as string }] : [];
+    const fromSources = Array.isArray(listing.sources)
+      ? listing.sources.map((s) => ({ name: s.name, url: s.url }))
       : [];
-    const rest = listing.sources.map((s) => ({ name: s.name, url: s.url }));
-    // de-dupe by url
+    // de-dupe by normalized url (strip trailing slash + drop hash)
+    const norm = (u: string) => {
+      try { const y = new URL(u); y.hash = ""; return y.toString().replace(/\/+$/, ""); } catch { return u; }
+    };
     const seen = new Set<string>();
     const uniq: SourceItem[] = [];
-    for (const s of [...primary, ...rest]) {
-      if (!s.url || seen.has(s.url)) continue;
-      seen.add(s.url);
-      uniq.push(s);
+    for (const s of [...fromListingUrl, ...fromSources]) {
+      const k = norm(s.url);
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      uniq.push({ ...s, url: k });
     }
     return uniq.slice(0, 8);
   }, [listing]);
@@ -202,7 +218,6 @@ export default function ListingSidePanel({
 
   if (!mounted) return null;
 
-  // quick actions
   const hasCoords =
     typeof listing?.lat === "number" && !Number.isNaN(listing?.lat) &&
     typeof listing?.lng === "number" && !Number.isNaN(listing?.lng);
@@ -252,7 +267,7 @@ export default function ListingSidePanel({
           </div>
         </div>
 
-        {/* Scroll area with soft edge fades */}
+        {/* Scroll area */}
         <div
           ref={scrollerRef}
           className="flex-1 overflow-y-auto px-4 sm:px-5 pb-[max(env(safe-area-inset-bottom),14px)]"
@@ -277,10 +292,8 @@ export default function ListingSidePanel({
                     unoptimized
                     priority={false}
                   />
-                  {/* ring + gradient */}
                   <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0" />
-                  {/* price badge */}
                   <div className="absolute left-3 top-3">
                     <span className="inline-flex items-center rounded-md border border-white/20 bg-black/70 px-2 py-0.5 text-[12px] font-semibold text-white backdrop-blur-sm shadow-sm">
                       {formatPrice(listing?.price)}
@@ -288,7 +301,6 @@ export default function ListingSidePanel({
                   </div>
                 </div>
 
-                {/* optional thumbs */}
                 {hasHeroStrip && (
                   <div className="mt-2 flex gap-2 px-3">
                     {listing!.images.slice(1, 6).map((src, i) => (
@@ -322,7 +334,6 @@ export default function ListingSidePanel({
             <Divider />
             <SectionHeader>Summary</SectionHeader>
 
-            {/* Spec grid */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               {has(listing?.beds) && (
                 <SpecItem
@@ -342,36 +353,21 @@ export default function ListingSidePanel({
                   label={typeLabel(listing)!}
                 />
               )}
-              {toSqm((listing as any)?.sizeSqm) && (
-                <SpecItem icon={<Ruler className="h-4 w-4 opacity-90" />} label={`${toSqm((listing as any).sizeSqm)} m²`} />
-              )}
+              {sqm && <SpecItem icon={<Ruler className="h-4 w-4 opacity-90" />} label={`${sqm} m²`} />}
             </div>
 
-            {/* — Divider + Actions — */}
-            {(mapsUrl) && (
+            {/* — Divider + Actions (Maps chip styled like sources) — */}
+            {mapsUrl && (
               <>
                 <Divider />
                 <SectionHeader>Actions</SectionHeader>
                 <div className="flex flex-wrap items-center gap-2">
-                  <a
-                    href={mapsUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[13px] text-white hover:bg-white/[0.10] transition"
-                  >
-                    <MapPin className="h-4 w-4" />
-                    Open in Maps
-                  </a>
-                </div>
-              </>
-            )}
-            {!mapsUrl && (
-              <>
-                <Divider />
-                <SectionHeader>Actions</SectionHeader>
-                <div className="flex flex-wrap items-center gap-2">
-                  <ShareButton className="inline-flex items-center gap-1.5 rounded-lg border border-white/12 bg-white/[0.05] px-3 py-1.5 text-[13px] text-slate-100 hover:bg-white/[0.10] transition" label="Copy link" />
+                  <SourceChip
+                    item={{
+                      name: "Google Maps",
+                      url: mapsUrl,
+                    }}
+                  />
                 </div>
               </>
             )}
@@ -383,7 +379,7 @@ export default function ListingSidePanel({
                 <SectionHeader>Links</SectionHeader>
                 <div className="grid grid-cols-1 gap-2">
                   {sources.map((s, i) => (
-                    <SourceButton key={`${s.url}-${i}`} item={s} prominent={i === 0} />
+                    <SourceChip key={`${s.url}-${i}`} item={s} />
                   ))}
                 </div>
               </>

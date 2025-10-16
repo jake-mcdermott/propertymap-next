@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState, useRef } from "react";
 import type { Listing } from "@/lib/types";
 import Header from "@/components/layout/Header";
 import { useSearchParams } from "next/navigation";
@@ -16,6 +16,7 @@ import BootSplash from "@/components/layout/Bootsplash";
 
 // ✅ use the cached fetcher
 import { fetchListingsCached } from "@/lib/fetchListingsCached";
+import { Layers, Train, ShoppingCart, X as XIcon, Sparkles, Map as MapIcon, Moon } from "lucide-react";
 
 /** Small helper: post-ready delay to let Leaflet finish its first paint */
 function usePostReadyDelay(ready: boolean, delayMs = 160) {
@@ -37,6 +38,106 @@ function usePostReadyDelay(ready: boolean, delayMs = 160) {
     return () => clearTimeout(t);
   }, [ready, delayMs]);
   return armed;
+}
+
+/* ---------------- "What's New" popup ---------------- */
+const WHATSNEW_KEY = "pm:whatsnew:layers:v2";
+
+function WhatsNewModal({
+  onClose,
+  onOpenLayers,
+}: {
+  onClose: () => void;
+  onOpenLayers: () => void;
+}) {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const prevActive = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    return () => prevActive?.focus?.();
+  }, []);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="whatsnew-title"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={onClose}
+      />
+      {/* Card */}
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="relative w-full max-w-md rounded-2xl border border-white/10 bg-neutral-900 shadow-2xl focus:outline-none"
+      >
+        <button
+          aria-label="Close"
+          onClick={onClose}
+          className="absolute right-3 top-3 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-neutral-800/60 hover:bg-neutral-800"
+        >
+          <XIcon className="h-4 w-4 text-slate-200" />
+        </button>
+
+        <div className="p-5 sm:p-6">
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-emerald-300">
+            <Sparkles className="h-4 w-4" />
+            <span className="text-sm font-medium">New feature</span>
+          </div>
+
+          <h3 id="whatsnew-title" className="text-xl font-semibold text-white">
+            Map Layers: Map Views, Transport & Supermarkets
+          </h3>
+
+          <p className="mt-2 text-sm leading-relaxed text-slate-200/90">
+            You can find new <span className="font-medium">Map Views</span> (Standard, Satellite, Dark),
+            plus <span className="font-medium">Transport</span> and <span className="font-medium">Supermarket</span> overlays
+            in the <span className="font-semibold">Layers</span> tab. Toggle Irish Rail &amp; Luas lines and quickly
+            see nearby chains.
+          </p>
+
+          <div className="mt-4 grid gap-3 text-slate-300">
+            <div className="flex items-center gap-2">
+              <Layers className="h-4 w-4" />
+              <span>Open the <strong>Layers</strong> tab on the map</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <MapIcon className="h-4 w-4" />
+              <span><strong>Map Views</strong>: Standard · Satellite · Dark</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Train className="h-4 w-4" />
+              <span>Show transport overlays (Irish Rail &amp; Luas)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4" />
+              <span>Plot nearby supermarkets at a glance</span>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button
+              onClick={onClose}
+              className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-neutral-800 px-4 py-2 text-sm font-medium hover:bg-neutral-800/80"
+            >
+              Close
+            </button>
+            <button
+              onClick={onOpenLayers}
+              className="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-neutral-900 hover:bg-emerald-400"
+            >
+              Open Layers tab
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function HomeClientInner() {
@@ -72,8 +173,6 @@ function HomeClientInner() {
         if (!alive) return;
         setRows(Array.isArray(listings) ? listings : []);
         setDatasetVersion(version);
-        // If you want to show a shorter splash when served from cache:
-        // if (fromCache) setBootReady((prev) => prev); // leave as-is; map still needs to boot
       } catch {
         if (!alive) return;
         setRows([]);
@@ -126,8 +225,7 @@ function HomeClientInner() {
 
   // If a new dataset version loads later (e.g., after a manifest change), clear selection
   useEffect(() => {
-    // nothing to do here unless you wire a background refresh that updates datasetVersion
-    // left for future extension
+    // reserved for future background refresh logic
   }, [datasetVersion]);
 
   // Ensure Leaflet gets a resize when switching to map on mobile
@@ -163,6 +261,40 @@ function HomeClientInner() {
     }
   }, [contentVisible, splashPhase]);
 
+  /* ---------------- Show "What's New" once ---------------- */
+  const [showWhatsNew, setShowWhatsNew] = useState(false);
+
+  useEffect(() => {
+    if (!contentVisible) return; // wait till map is ready
+    try {
+      const seen = localStorage.getItem(WHATSNEW_KEY);
+      if (!seen) {
+        // tiny delay so it appears after UI settles
+        const t = setTimeout(() => setShowWhatsNew(true), 200);
+        return () => clearTimeout(t);
+      }
+    } catch {
+      // ignore storage errors; fail quietly
+    }
+  }, [contentVisible]);
+
+  const handleCloseWhatsNew = () => {
+    try {
+      localStorage.setItem(WHATSNEW_KEY, "1");
+    } catch {}
+    setShowWhatsNew(false);
+  };
+
+  const handleOpenLayers = () => {
+    try {
+      localStorage.setItem(WHATSNEW_KEY, "1");
+    } catch {}
+    // Emit a custom event in case you want to auto-open a Layers panel elsewhere.
+    // In your Layers UI, you can listen: window.addEventListener("pm:open-layers", ...)
+    window.dispatchEvent(new CustomEvent("pm:open-layers"));
+    setShowWhatsNew(false);
+  };
+
   return (
     <main className="h-dvh overflow-hidden bg-neutral-950 text-slate-100 flex flex-col relative">
       <Header />
@@ -172,7 +304,6 @@ function HomeClientInner() {
         Find property for sale on an interactive map across Ireland
       </h1>
       <h2 className="sr-only">Popular searches and quick filters</h2>
-
 
       {isDesktop === null ? (
         <div className="flex-1 min-h-0" />
@@ -233,6 +364,14 @@ function HomeClientInner() {
         >
           <BootSplash />
         </div>
+      )}
+
+      {/* What's New modal */}
+      {showWhatsNew && (
+        <WhatsNewModal
+          onClose={handleCloseWhatsNew}
+          onOpenLayers={handleOpenLayers}
+        />
       )}
     </main>
   );

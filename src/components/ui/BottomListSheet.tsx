@@ -144,6 +144,19 @@ export default function BottomListSheet({
   const nearestSnap = (h: number, snaps: SnapHeights = snapHeights) =>
     Math.abs(h - snaps[0]) <= Math.abs(h - snaps[1]) ? snaps[0] : snaps[1];
 
+  // Track animation direction so we can slow only the "open" (up) motion
+  const prevHeightRef = useRef<number>(0);
+  const [animUp, setAnimUp] = useState(false);
+  useEffect(() => {
+    if (!ready || dragging) {
+      prevHeightRef.current = height;
+      return;
+    }
+    const was = prevHeightRef.current;
+    setAnimUp(height > was); // moving to a larger height = sliding UP
+    prevHeightRef.current = height;
+  }, [height, ready, dragging]);
+
   // controlled open
   useEffect(() => {
     if (!ready) return;
@@ -160,7 +173,8 @@ export default function BottomListSheet({
   });
 
   const clampHeight = (h: number) => Math.max(snapHeights[0], Math.min(snapHeights[1], h));
-  const heightToTranslateY = (h: number) => Math.max(0, (containerHRef.current || 0) - h);
+  const heightToTranslateY = (h: number) =>
+    Math.max(0, Math.round((containerHRef.current || 0) - h)); // round to avoid subpixel shimmer
 
   const startDrag: React.PointerEventHandler<HTMLDivElement> = (e) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
@@ -225,13 +239,21 @@ export default function BottomListSheet({
   const canPrev = page > 1;
   const canNext = page < localTotalPages;
 
+  // --- animation classes: slow when animating UP, snappier when animating DOWN
+  const transitionClass =
+    dragging || !ready
+      ? "transition-none"
+      : (animUp
+          ? "transition-transform duration-[450ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+          : "transition-transform duration-300 ease-[cubic-bezier(0.32,0,0.67,0)]");
+
   return (
     <div className="absolute inset-x-0 bottom-0 pointer-events-none" style={{ top: 0 }}>
       <div
         ref={panelRef}
         className={[
-          "absolute left-0 right-0 bottom-0 z-20 pointer-events-auto will-change-transform",
-          dragging || !ready ? "transition-none" : "transition-transform duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)]",
+          "absolute left-0 right-0 bottom-0 z-20 pointer-events-auto will-change-transform transform-gpu",
+          transitionClass,
         ].join(" ")}
         style={{
           height: containerHRef.current || 0,

@@ -16,6 +16,13 @@ type Props = {
   rows: Row[];
   valueLabel?: string;              // e.g., "Avg Price" or "Avg €/m²"
   valueFmt?: (n: number) => string; // e.g., €12,345 or €3,456 / m²
+
+  // External values to include in the color-ramp domain (e.g., NI EUR averages)
+  extraValues?: number[];
+  // NI overlay FeatureCollection with properties { __avg, __cnt, __county }
+  niOverlay?: FeatureCollection | null;
+  niOverlayLabel?: string;
+  niOverlayFmt?: (n: number) => string;
 };
 
 const rkPropCandidates = ["ROUTINGKEY","ROUTING_KEY","ROUTE_KEY","RK","EIRCODE","POSTCODE","POSTALCODE","POSTAL_K","POSTAL"];
@@ -29,14 +36,22 @@ const extractRK = (val: unknown): string | null => {
   return /^[A-Z0-9]{3}$/.test(rk) ? rk : null;
 };
 
-export default function RoutingMap({ rows, valueLabel = "Avg", valueFmt = defaultFmt }: Props) {
+export default function RoutingMap({
+  rows,
+  valueLabel = "Avg",
+  valueFmt = defaultFmt,
+  extraValues,
+  niOverlay,
+  niOverlayLabel = "Avg",
+  niOverlayFmt = defaultFmt,
+}: Props) {
   const [geo, setGeo] = React.useState<FeatureCollection | null>(null);
   const [rkProp, setRkProp] = React.useState<string | null>(null);
   const [descProp, setDescProp] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState("");
 
-  // Load the shapes once
+  // Load the ROI routing key shapes once
   React.useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -73,7 +88,7 @@ export default function RoutingMap({ rows, valueLabel = "Avg", valueFmt = defaul
     return m;
   }, [rows]);
 
-  // Merge stats into features (filter to rows we actually have)
+  // Merge stats into ROI features (filter to rows we actually have)
   const fc: FeatureCollection | null = React.useMemo(() => {
     if (!geo) return null;
     const feats: Feature[] = [];
@@ -105,9 +120,11 @@ export default function RoutingMap({ rows, valueLabel = "Avg", valueFmt = defaul
     return { type: "FeatureCollection", features: feats };
   }, [geo, rkProp, descProp, rkStats]);
 
-  // Color scale from current rows (whatever metric they carry)
+  // Color scale from current rows + extraValues (for NI parity)
   const scale = React.useMemo(() => {
-    const avgs = rows.map((x) => x.avg).filter(Number.isFinite).sort((a, b) => a - b);
+    const base = rows.map((x) => x.avg).filter((v) => Number.isFinite(v)) as number[];
+    const extras = (extraValues ?? []).filter((v) => Number.isFinite(v)) as number[];
+    const avgs = [...base, ...extras].sort((a, b) => a - b);
     if (!avgs.length) return { colorFor: (_: number) => "#555" };
     const q = (p: number) => avgs[Math.min(avgs.length - 1, Math.max(0, Math.floor(p * (avgs.length - 1))))];
     const stops = [q(0.05), q(0.25), q(0.5), q(0.75), q(0.95)];
@@ -117,23 +134,26 @@ export default function RoutingMap({ rows, valueLabel = "Avg", valueFmt = defaul
       return palette[i];
     };
     return { colorFor };
-  }, [rows]);
+  }, [rows, extraValues]);
 
   const mapRef = React.useRef<LeafletMap | null>(null);
   const dublin: LatLngExpression = [53.35, -6.26];
 
-  // Fit bounds to visible features
+  // Fit bounds to visible layers (ROI + NI if provided)
   React.useEffect(() => {
-    if (!fc || !fc.features.length) return;
+    if (!mapRef.current) return;
     const L = (globalThis as any).L;
-    const map = mapRef.current;
-    if (!map || !L) return;
+    if (!L) return;
     try {
-      const layer = L.geoJSON(fc);
-      const b = layer.getBounds();
-      if (b.isValid()) map.fitBounds(b, { padding: [20, 20] });
+      const layers: any[] = [];
+      if (fc && fc.features.length) layers.push(L.geoJSON(fc));
+      if (niOverlay && niOverlay.features.length) layers.push(L.geoJSON(niOverlay));
+      if (!layers.length) return;
+      const group = L.featureGroup(layers);
+      const b = group.getBounds();
+      if (b && b.isValid()) mapRef.current!.fitBounds(b, { padding: [20, 20] });
     } catch {}
-  }, [fc]);
+  }, [fc, niOverlay]);
 
   return (
     <div className="relative w-full h-[380px] md:h-[520px]">
@@ -151,10 +171,8 @@ export default function RoutingMap({ rows, valueLabel = "Avg", valueFmt = defaul
         .leaflet-map-pane { z-index: 0 !important; }
       `}</style>
 
-      {loading && <div className="absolute inset-0 grid place-content-center text-neutral-400 text-sm">Loading map…</div>}
-      {err && <div className="absolute inset-0 grid place-content-center text-red-400 text-sm">{err}</div>}
-
-      {!loading && !err && (
+      {/* Render the map if ROI has loaded OR NI overlay exists */}
+      {(!loading || niOverlay) && (
         <MapContainer
           ref={mapRef as any}
           center={dublin}
@@ -168,9 +186,11 @@ export default function RoutingMap({ rows, valueLabel = "Avg", valueFmt = defaul
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
             detectRetina
           />
+
+          {/* ROI routing-keys layer */}
           {fc && (
             <GeoJSON
-              key={rows.length + (valueLabel ?? "Avg")}
+              key={"roi-" + rows.length + (valueLabel ?? "Avg")}
               data={fc as any}
               style={(feat?: Feature) => {
                 const p = (feat?.properties ?? {}) as any;
@@ -202,7 +222,54 @@ export default function RoutingMap({ rows, valueLabel = "Avg", valueFmt = defaul
               }}
             />
           )}
+
+          {/* NI County overlay (optional) */}
+          {niOverlay && (
+            <GeoJSON
+              key={"ni-" + (niOverlay.features?.length ?? 0)}
+              data={niOverlay as any}
+              style={(feat?: Feature) => {
+                const p = (feat?.properties ?? {}) as any;
+                const avg = p?.__avg as number | undefined;
+                return {
+                  color: "#0e0e0e",
+                  weight: 0.8,
+                  fillColor: Number.isFinite(avg) ? scale.colorFor(avg!) : "#555",
+                  fillOpacity: 0.65,
+                };
+              }}
+              onEachFeature={(feature: Feature, layer: Layer) => {
+                const p = (feature.properties ?? {}) as any;
+                const county = p.__county as string | undefined;
+                const avg = p.__avg as number | undefined;
+                const cnt = p.__cnt as number | undefined;
+                const html = `
+                  <div style="font:12px/1.3 system-ui,-apple-system,Segoe UI,Roboto;color:#000;">
+                    <div style="font-weight:600;">${county ? titleCase(county) : "—"} (NI)</div>
+                    <div>${niOverlayLabel ?? "Avg"}: ${Number.isFinite(avg) ? (niOverlayFmt?.(avg!) ?? defaultFmt(avg!)) : "—"}</div>
+                    <div>Sample: ${cnt ?? "—"}</div>
+                  </div>`;
+                (layer as any).bindPopup(html);
+                (layer as any).on("mouseover", () => (layer as any).setStyle({ weight: 1.3, fillOpacity: 0.78 }));
+                (layer as any).on("mouseout",  () => (layer as any).setStyle({ weight: 0.8, fillOpacity: 0.65 }));
+              }}
+            />
+          )}
         </MapContainer>
+      )}
+
+      {/* Only show error overlay if NI overlay isn't available */}
+      {err && !niOverlay && (
+        <div className="absolute inset-0 grid place-content-center text-red-400 text-sm">
+          {err}
+        </div>
+      )}
+
+      {/* Loading overlay only when neither layer can render yet */}
+      {loading && !niOverlay && !err && (
+        <div className="absolute inset-0 grid place-content-center text-neutral-400 text-sm">
+          Loading map…
+        </div>
       )}
     </div>
   );
