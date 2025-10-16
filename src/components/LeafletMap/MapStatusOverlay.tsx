@@ -8,6 +8,7 @@ import L from "leaflet";
 import { Clock, TrainFront, TramFront, ShoppingCart } from "lucide-react";
 import { fetchManifestClient } from "@/lib/fetchManifestClient";
 import { renderToString } from "react-dom/server";
+import SchoolsLayer from "./layers/SchoolStatusOverlay";
 
 type ManifestInfo = { updatedAt?: Date | null };
 
@@ -86,12 +87,21 @@ export default function MapStatusOverlay() {
     useState<FeatureCollection<Point, Record<string, any>> | null>(null);
   const [loadingSupermarkets, setLoadingSupermarkets] = useState(true);
 
+  // Schools
+  const [schools, setSchools] =
+    useState<FeatureCollection<Point, Record<string, any>> | null>(null);
+  const [loadingSchools, setLoadingSchools] = useState(true);
+
   // UI prefs
   const [showTransit, setShowTransit] = useState<boolean>(() => {
     try { return localStorage.getItem("pm-layer-transport") === "1"; } catch { return false; }
   });
   const [showSupermarkets, setShowSupermarkets] = useState<boolean>(() => {
     try { return localStorage.getItem("pm-layer-supermarkets") === "1"; } catch { return false; }
+  });
+
+  const [showSchools, setShowSchools] = useState<boolean>(() => {
+    try { return localStorage.getItem("pm-layer-schools") === "1"; } catch { return false; }
   });
 
   const [minZoomForRails, setMinZoomForRails] = useState<number>(() => {
@@ -107,6 +117,8 @@ export default function MapStatusOverlay() {
       try {
         setShowTransit(localStorage.getItem("pm-layer-transport") === "1");
         setShowSupermarkets(localStorage.getItem("pm-layer-supermarkets") === "1");
+        setShowSchools(localStorage.getItem("pm-layer-schools") === "1");
+
         setMinZoomForRails(parseInt(localStorage.getItem("pm-layer-transport-minzoom") || "10", 10));
       } catch {}
     };
@@ -138,6 +150,9 @@ useEffect(() => {
   const supermarketTopZ = showSupermarkets ? 20000 : 600;
   const supermarketTipZ = showSupermarkets ? 20500 : 650;
 
+  const schoolTopZ = showSchools ? 20000 : 600;
+  const schoolTipZ = showSchools ? 20500 : 650;
+
   // Rail stations (above listings)
   const stationPane = map.getPane("pmStationPane") ?? map.createPane("pmStationPane");
   if (stationPane) {
@@ -164,6 +179,18 @@ useEffect(() => {
     smTipPane.style.pointerEvents = "none";
   }
 
+  // Schools
+  const schoolPane = map.getPane("pmSchoolPane") ?? map.createPane("pmSchoolPane");
+  if (schoolPane) {
+    schoolPane.style.zIndex = String(schoolTopZ);
+    schoolPane.style.pointerEvents = "auto";
+  }
+  const schoolPanePopupPane = map.getPane("pmSchoolPopupPane") ?? map.createPane("pmSchoolPopupPane");
+  if (schoolPanePopupPane) {
+    schoolPanePopupPane.style.zIndex = String(schoolTipZ);
+    schoolPanePopupPane.style.pointerEvents = "auto";
+  }
+
   // Tooltips (transit)
   const stationTipPane = map.getPane("pmStationTooltipPane") ?? map.createPane("pmStationTooltipPane");
   if (stationTipPane) {
@@ -175,7 +202,7 @@ useEffect(() => {
     tramTipPane.style.zIndex = String(transitTipZ);
     tramTipPane.style.pointerEvents = "none";
   }
-}, [map, showTransit, showSupermarkets]);
+}, [map, showTransit, showSupermarkets, showSchools]);
 
   // Load “updatedAt”
   useEffect(() => {
@@ -303,6 +330,27 @@ useEffect(() => {
     return () => { alive = false; };
   }, []);
 
+    // Load Schools
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/data/schools.geojson", { cache: "force-cache" });
+        if (!res.ok) throw new Error(`Failed schools.geojson: ${res.status}`);
+        const json =
+          (await res.json()) as FeatureCollection<Point, Record<string, any>>;
+        if (!alive) return;
+        setSchools(json);
+      } catch {
+        if (!alive) return;
+        setSchools(null);
+      } finally {
+        if (alive) setLoadingSchools(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const rel = useMemo(
     () => (info?.updatedAt ? formatRelative(new Date(info.updatedAt)) : null),
     [info?.updatedAt]
@@ -321,6 +369,9 @@ useEffect(() => {
 
   const supermarketsMinZoom = 12; // show fairly early, adjust if needed
   const supermarketsVisible = !!supermarkets && !!showSupermarkets && zoom >= supermarketsMinZoom;
+
+  const schoolsMinZoom = 14;
+  const schoolsVisible = !!schools && !!showSchools && zoom >= schoolsMinZoom;
 
   // dynamic sizes
   const railWeightMain = Math.max(1.5, Math.min(3, (zoom - 8) * 0.4)); // rails thickness
@@ -501,6 +552,13 @@ useEffect(() => {
             });
           }}
         />
+      )}
+
+      {schoolsVisible && !loadingSchools && ( 
+        <SchoolsLayer 
+          map={map} 
+          schools={schools} 
+          zoom={schoolsMinZoom}/>
       )}
 
       {/* Status pill */}

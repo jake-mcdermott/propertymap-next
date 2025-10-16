@@ -12,7 +12,6 @@ import {
   ShoppingCart,
   TrainFront,
   Baby,
-  School
 } from "lucide-react";
 
 /** Types */
@@ -52,6 +51,7 @@ export default function MapLayersDialog({
       );
       setSupermarkets(localStorage.getItem("pm-layer-supermarkets") === "1");
       setTransport(localStorage.getItem("pm-layer-transport") === "1");
+      setSchools(localStorage.getItem("pm-layer-schools") === "1");
 
       const zRaw = localStorage.getItem("pm-layer-transport-minzoom");
       const z = zRaw ? parseInt(zRaw, 10) : 10;
@@ -79,6 +79,7 @@ export default function MapLayersDialog({
       localStorage.setItem("pm-basemap", draftBasemap);
       localStorage.setItem("pm-layer-supermarkets", supermarkets ? "1" : "0");
       localStorage.setItem("pm-layer-transport", transport ? "1" : "0");
+      localStorage.setItem("pm-layer-schools", schools ? "1" : "0");
       localStorage.setItem("pm-layer-transport-minzoom", String(transportMinZoom));
     } catch {}
 
@@ -213,6 +214,14 @@ export default function MapLayersDialog({
             </div>
 
             <RowToggle
+              icon={<img src="/icons/white-apple.svg" className="h-4 w-4" />}
+              label="Schools"
+              sub="Primary and secondary schools"
+              checked={schools}
+              onChange={setSchools}
+            />
+
+            <RowToggle
               icon={<ShoppingCart className="h-4 w-4" />}
               label="Supermarkets"
               sub="Tesco, Aldi & SuperValu stores"
@@ -227,14 +236,6 @@ export default function MapLayersDialog({
               sub="Creches and childcare services"
               checked={childcare}
               onChange={setChildcare}
-              disabled
-            />
-            <RowToggle
-              icon={<School className="h-4 w-4" />}
-              label="Schools (In Progress)"
-              sub="Primary and secondary schools"
-              checked={schools}
-              onChange={setSchools}
               disabled
             />
           </Section>
