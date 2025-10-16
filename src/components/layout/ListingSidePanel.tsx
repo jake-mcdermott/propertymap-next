@@ -44,10 +44,9 @@ function typeLabel(listing?: Listing | null) {
   return k.charAt(0).toUpperCase() + k.slice(1).toLowerCase();
 }
 
-/* ======================= Sources (uniform white chips, per-brand logo) ======================= */
+/* ======================= Sources (uniform chips, per-brand logo) ======================= */
 type SourceItem = { name?: string; url: string };
 
-// Detect a brand from URL host
 function brandFromUrl(url: string): string {
   try {
     const host = new URL(url).host.replace(/^www\./i, "").toLowerCase();
@@ -66,7 +65,6 @@ function brandFromUrl(url: string): string {
   }
 }
 
-// Human labels
 function prettyName(brand: string): string {
   switch (brand) {
     case "myhome": return "MyHome";
@@ -86,15 +84,24 @@ function prettyName(brand: string): string {
 const BRAND_LOGO: Record<string, string> = {
   myhome: "/logos/myhome.png",
   daft: "/logos/daft.png",
+  findqo: "/logos/findqo.png",
   sherryfitz: "/logos/sherryfitz.png",
   dng: "/logos/dng.png",
   westcorkproperty: "/logos/westcorkproperty.png",
   michelleburke: "/logos/michelleburke.png",
-  zoopla: "/logos/zoopla.png",
-  propertymap: "/logos/propertymap.png",
-  googlemaps: "/logos/googlemaps.png", // add this to public/logos
-  generic: "/logos/generic.png",       // and a neutral fallback
+  googlemaps: "/logos/googlemaps.png",
+  generic: "/logos/generic.png",
 };
+
+// one source of truth for chip dimensions + style (black fill, white border)
+const CHIP_BASE =
+  [
+    "group relative flex items-center gap-3 rounded-2xl no-underline",
+    "h-11 px-3.5",
+    "border border-white/80 bg-black text-white",
+    "shadow-[0_6px_18px_-10px_rgba(0,0,0,0.7)] hover:bg-black/90 hover:border-white transition",
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60",
+  ].join(" ");
 
 function SourceChip({ item }: { item: SourceItem }) {
   const brand = brandFromUrl(item.url);
@@ -108,43 +115,35 @@ function SourceChip({ item }: { item: SourceItem }) {
       rel="noreferrer"
       title={label}
       onClick={(e) => e.stopPropagation()}
-      className={[
-        "group relative flex items-center gap-3 rounded-2xl no-underline",
-        "px-3 py-2.5 border border-slate-200/80 bg-white text-slate-900",
-        "shadow-sm hover:shadow-md hover:bg-slate-50 transition",
-        "focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-300",
-      ].join(" ")}
+      className={CHIP_BASE}
     >
-      {/* brand logo (transparent PNGs in /public/logos) */}
+      {/* brand logo — fixed 20px */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={src}
-        width={18}
-        height={18}
+        width={20}
+        height={20}
         alt=""
-        className="h-[18px] w-[18px] object-contain"
+        className="h-5 w-5 object-contain"
         onError={() => setSrc(BRAND_LOGO.generic)}
         loading="lazy"
       />
-
-      {/* label only — no URL/host/path */}
-      <span className="flex-1 truncate text-[13.5px] font-semibold leading-tight">
+      <span className="flex-1 truncate text-[13px] font-semibold leading-none">
         {label}
       </span>
-
-      <ExternalLink className="h-4.5 w-4.5 text-slate-500 group-hover:text-slate-700 transition" />
+      <ExternalLink className="h-4 w-4 text-white/80 group-hover:text-white transition" />
     </a>
   );
 }
 
-/* ======================= minimalist spec items ======================= */
-function SpecItem({ icon, label }: { icon: React.ReactNode; label: string }) {
+/* ======================= Summary items (white icon only) ======================= */
+function SummaryItem({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
-    <div className="flex items-center gap-2 text-[13px] text-slate-200">
-      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/10">
-        {icon}
+    <div className="flex items-center gap-2.5">
+      <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-white ring-1 ring-slate-300">
+        <span className="text-slate-900">{icon}</span>
       </span>
-      <span className="leading-none">{label}</span>
+      <span className="text-[13.5px] font-medium text-white/90 leading-tight">{label}</span>
     </div>
   );
 }
@@ -199,7 +198,6 @@ export default function ListingSidePanel({
     const fromSources = Array.isArray(listing.sources)
       ? listing.sources.map((s) => ({ name: s.name, url: s.url }))
       : [];
-    // de-dupe by normalized url (strip trailing slash + drop hash)
     const norm = (u: string) => {
       try { const y = new URL(u); y.hash = ""; return y.toString().replace(/\/+$/, ""); } catch { return u; }
     };
@@ -215,6 +213,19 @@ export default function ListingSidePanel({
   }, [listing]);
 
   const hasHeroStrip = Array.isArray(listing?.images) && listing!.images.length > 1;
+
+  // Pre-composed email link
+  const emailHref = useMemo(() => {
+    const subject = listing
+      ? `Issue with listing: ${titleText(listing)}`
+      : "Issue with listing";
+    const possibleUrl =
+      (listing as any)?.url || (typeof window !== "undefined" ? window.location.href : "");
+    const body = `Hi PropertyMap,\n\nThere's an issue with this listing:\n${titleText(
+      listing || undefined
+    )}\n${possibleUrl}\n\nDetails:\n`;
+    return `mailto:info@propertymap.ie?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  }, [listing]);
 
   if (!mounted) return null;
 
@@ -279,7 +290,7 @@ export default function ListingSidePanel({
           }}
         >
           <div className="space-y-7">
-            {/* Hero */}
+            {/* Hero (no price overlay anymore) */}
             {listing?.images?.[0] ? (
               <div className="relative -mx-4 sm:-mx-5">
                 <div className="relative overflow-hidden">
@@ -288,17 +299,12 @@ export default function ListingSidePanel({
                     alt={titleText(listing)}
                     width={1920}
                     height={1080}
-                    className="block h-56 w-full object-cover"
+                    className="block h-72 lg:h-80 w-full object-cover"
                     unoptimized
                     priority={false}
                   />
                   <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0" />
-                  <div className="absolute left-3 top-3">
-                    <span className="inline-flex items-center rounded-md border border-white/20 bg-black/70 px-2 py-0.5 text-[12px] font-semibold text-white backdrop-blur-sm shadow-sm">
-                      {formatPrice(listing?.price)}
-                    </span>
-                  </div>
                 </div>
 
                 {hasHeroStrip && (
@@ -319,11 +325,16 @@ export default function ListingSidePanel({
               </div>
             ) : null}
 
-            {/* Title */}
+            {/* Price + Title */}
             <div className="space-y-1 px-0.5">
+              <div className="text-2xl font-semibold leading-tight text-white">
+                {formatPrice(listing?.price)}
+              </div>
+
               <h1 className="text-lg font-semibold leading-tight">{titleText(listing)}</h1>
+
               {sub ? (
-                <div className="flex items-center gap-1.5 text-[13px] leading-tight text-white/75">
+                <div className="flex items-center gap-1.5 text-sm leading-tight text-white/75">
                   <MapPin className="h-4 w-4 shrink-0 opacity-80" />
                   <span className="truncate">{sub}</span>
                 </div>
@@ -336,24 +347,26 @@ export default function ListingSidePanel({
 
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               {has(listing?.beds) && (
-                <SpecItem
-                  icon={<BedDouble className="h-4 w-4 opacity-90" />}
+                <SummaryItem
+                  icon={<BedDouble className="h-4 w-4" />}
                   label={listing!.beds === 0 ? "Studio" : `${listing!.beds} bed${listing!.beds === 1 ? "" : "s"}`}
                 />
               )}
               {has(listing?.baths) && (
-                <SpecItem
-                  icon={<Bath className="h-4 w-4 opacity-90" />}
+                <SummaryItem
+                  icon={<Bath className="h-4 w-4" />}
                   label={`${listing!.baths} bath${listing!.baths === 1 ? "" : "s"}`}
                 />
               )}
               {typeLabel(listing) && (
-                <SpecItem
-                  icon={isApt ? <Building2 className="h-4 w-4 opacity-90" /> : <Home className="h-4 w-4 opacity-90" />}
+                <SummaryItem
+                  icon={isApt ? <Building2 className="h-4 w-4" /> : <Home className="h-4 w-4" />}
                   label={typeLabel(listing)!}
                 />
               )}
-              {sqm && <SpecItem icon={<Ruler className="h-4 w-4 opacity-90" />} label={`${sqm} m²`} />}
+              {toSqm((listing as any)?.sizeSqm) && (
+                <SummaryItem icon={<Ruler className="h-4 w-4" />} label={`${toSqm((listing as any).sizeSqm)} m²`} />
+              )}
             </div>
 
             {/* — Divider + Actions (Maps chip styled like sources) — */}
@@ -362,12 +375,7 @@ export default function ListingSidePanel({
                 <Divider />
                 <SectionHeader>Actions</SectionHeader>
                 <div className="flex flex-wrap items-center gap-2">
-                  <SourceChip
-                    item={{
-                      name: "Google Maps",
-                      url: mapsUrl,
-                    }}
-                  />
+                  <SourceChip item={{ name: "Google Maps", url: mapsUrl }} />
                 </div>
               </>
             )}
@@ -384,6 +392,23 @@ export default function ListingSidePanel({
                 </div>
               </>
             )}
+
+            {/* — Divider + Feedback — */}
+            <>
+              <Divider />
+              <SectionHeader>Troubleshooting</SectionHeader>
+              <p className="text-[12.5px] leading-snug text-white/70">
+                Noticed an issue with this listing? Please contact{" "}
+                <a
+                  href={emailHref}
+                  className="underline decoration-white/40 underline-offset-[3px] hover:decoration-white"
+                >
+                  info@propertymap.ie
+                </a>
+                .
+              </p>
+            </>
+            <div className=""></div>
           </div>
         </div>
       </aside>
