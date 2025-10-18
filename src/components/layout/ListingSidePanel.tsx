@@ -1,11 +1,12 @@
 // src/components/map/ListingSidePanel.tsx
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { createPortal } from "react-dom";
-import Image from "next/image";
+import NextImage from "next/image";
 import {
   ChevronRight,
+  ChevronLeft,
   MapPin,
   BedDouble,
   Bath,
@@ -13,6 +14,7 @@ import {
   Home,
   Building2,
   ExternalLink,
+  Copy,
 } from "lucide-react";
 import type { Listing } from "@/lib/types";
 
@@ -57,7 +59,7 @@ function brandFromUrl(url: string): string {
     if (host.includes("westcorkproperty")) return "westcorkproperty";
     if (host.includes("michelleburke")) return "michelleburke";
     if (host.includes("zoopla")) return "zoopla";
-    if (host.includes("propertymap") || host.includes("findqo")) return "propertymap";
+    if (host.includes("findqo")) return "findqo";
     if (host.includes("google")) return "googlemaps";
     return "generic";
   } catch {
@@ -74,7 +76,7 @@ function prettyName(brand: string): string {
     case "westcorkproperty": return "James Lyon O'Keefe";
     case "michelleburke": return "Michelle Burke";
     case "zoopla": return "Zoopla";
-    case "propertymap": return "PropertyMap";
+    case "findqo": return "FindQo";
     case "googlemaps": return "Google Maps";
     default: return "Source";
   }
@@ -100,7 +102,7 @@ const CHIP_BASE =
     "h-11 px-3.5",
     "border border-white/80 bg-black text-white",
     "shadow-[0_6px_18px_-10px_rgba(0,0,0,0.7)] hover:bg-black/90 hover:border-white transition",
-    "focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60",
+    "focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 cursor-pointer",
   ].join(" ");
 
 function SourceChip({ item }: { item: SourceItem }) {
@@ -136,6 +138,62 @@ function SourceChip({ item }: { item: SourceItem }) {
   );
 }
 
+/* Action chip (same style as SourceChip) — LEFT icon only */
+function ActionCopyChip({ listing }: { listing: Listing }) {
+  const [copied, setCopied] = useState(false);
+  const shareUrl = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const id = (listing as any)?.id || (listing as any)?.eircode || "";
+    return `${window.location.origin}/?listing=${encodeURIComponent(String(id || ""))}`;
+  }, [listing]);
+
+  const handleCopy = () => {
+    if (!shareUrl) return;
+    navigator.clipboard.writeText(shareUrl).then(
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1200);
+      },
+      () => {
+        // Fallback
+        try {
+          const el = document.createElement("textarea");
+          el.value = shareUrl;
+          el.setAttribute("readonly", "");
+          el.style.position = "absolute";
+          el.style.left = "-9999px";
+          document.body.appendChild(el);
+          el.select();
+          document.execCommand("copy");
+          document.body.removeChild(el);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1200);
+        } catch {}
+      }
+    );
+  };
+
+  return (
+    <button
+      type="button"
+      className={CHIP_BASE}
+      title="Copy link"
+      aria-label="Copy link"
+      onClick={(e) => {
+        e.stopPropagation();
+        handleCopy();
+      }}
+    >
+      <span className="inline-flex h-5 w-5 items-center justify-center">
+        <Copy className="h-4 w-4 text-white/90" />
+      </span>
+      <span className="flex-1 truncate text-[13px] font-semibold leading-none">
+        {copied ? "Copied!" : "Copy Link"}
+      </span>
+    </button>
+  );
+}
+
 /* ======================= Summary items (white icon only) ======================= */
 function SummaryItem({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
@@ -160,6 +218,159 @@ function Divider() {
   return (
     <div className="relative -mx-4 sm:-mx-5 h-px">
       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/12 to-transparent" />
+    </div>
+  );
+}
+
+/* ======================= Image Carousel (no thumbnail strip) ======================= */
+function clamp(n: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, n));
+}
+
+function ImageCarousel({
+  images,
+  alt,
+  onOpenFull,
+}: {
+  images: string[];
+  alt: string;
+  onOpenFull?: () => void; // reserved if you add a gallery modal later
+}) {
+  const [index, setIndex] = useState(0);
+  const [dragX, setDragX] = useState(0);
+  const [touching, setTouching] = useState(false);
+  const startXRef = useRef<number | null>(null);
+
+  // reset when images change
+  useEffect(() => setIndex(0), [images.join("|")]);
+
+  const total = images.length;
+
+  const go = useCallback((delta: number) => {
+    setIndex((i) => {
+      const next = (i + delta + total) % total;
+      return next;
+    });
+  }, [total]);
+
+  // keyboard arrows
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") go(-1);
+      else if (e.key === "ArrowRight") go(1);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [go]);
+
+  // preload neighbors
+  useEffect(() => {
+    if (typeof window === "undefined" || total < 2) return;
+    const next = new window.Image();
+    next.decoding = "async";
+    next.loading = "eager";
+    next.src = images[(index + 1) % total] || "";
+
+    const prev = new window.Image();
+    prev.decoding = "async";
+    prev.loading = "eager";
+    prev.src = images[(index - 1 + total) % total] || "";
+  }, [index, images, total]);
+
+  // touch/swipe handlers
+  const onTouchStart = (e: React.TouchEvent) => {
+    startXRef.current = e.touches[0].clientX;
+    setTouching(true);
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    if (startXRef.current == null) return;
+    const dx = e.touches[0].clientX - startXRef.current;
+    setDragX(dx);
+  };
+  const onTouchEnd = () => {
+    const threshold = 48;
+    if (dragX > threshold) go(-1);
+    else if (dragX < -threshold) go(1);
+    setDragX(0);
+    setTouching(false);
+    startXRef.current = null;
+  };
+
+  return (
+    <div className="relative -mx-4 sm:-mx-5 select-none">
+      {/* Main image area */}
+      <div
+        className="relative overflow-hidden"
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        <div
+          className="relative"
+          style={{
+            transform: `translate3d(${touching ? clamp(dragX, -120, 120) : 0}px,0,0)`,
+            transition: touching ? "none" : "transform 200ms ease",
+          }}
+        >
+          <NextImage
+            key={images[index] ?? "img"}
+            src={images[index] ?? ""}
+            alt={alt}
+            width={1920}
+            height={1080}
+            className="block h-72 lg:h-80 w-full object-cover"
+            unoptimized
+            priority={false}
+            onClick={onOpenFull}
+          />
+          <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
+          <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0" />
+        </div>
+
+        {/* Left/Right gradient hit areas */}
+        {total > 1 && (
+          <>
+            <button
+              type="button"
+              aria-label="Previous image"
+              className={[
+                "absolute left-0 top-0 h-full w-16 flex items-center justify-start",
+                "bg-gradient-to-r from-black/35 to-transparent",
+                "hover:from-black/45 active:scale-[0.98]",
+              ].join(" ")}
+              onClick={(e) => { e.stopPropagation(); go(-1); }}
+            >
+              <span className="ml-1 inline-flex items-center justify-center rounded-full bg-black/60 ring-1 ring-white/15 p-1.5">
+                <ChevronLeft className="h-5 w-5 text-white" />
+              </span>
+            </button>
+            <button
+              type="button"
+              aria-label="Next image"
+              className={[
+                "absolute right-0 top-0 h-full w-16 flex items-center justify-end",
+                "bg-gradient-to-l from-black/35 to-transparent",
+                "hover:from-black/45 active:scale-[0.98]",
+              ].join(" ")}
+              onClick={(e) => { e.stopPropagation(); go(1); }}
+            >
+              <span className="mr-1 inline-flex items-center justify-center rounded-full bg-black/60 ring-1 ring-white/15 p-1.5">
+                <ChevronRight className="h-5 w-5 text-white" />
+              </span>
+            </button>
+          </>
+        )}
+
+        {/* Counter badge */}
+        {total > 1 && (
+          <div
+            className="absolute right-2 top-2 rounded-full bg-black/65 px-2.5 py-1 text-[12px] font-semibold text-white ring-1 ring-white/20"
+            aria-live="polite"
+          >
+            {index + 1} / {total}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -212,8 +423,6 @@ export default function ListingSidePanel({
     return uniq.slice(0, 8);
   }, [listing]);
 
-  const hasHeroStrip = Array.isArray(listing?.images) && listing!.images.length > 1;
-
   // Pre-composed email link
   const emailHref = useMemo(() => {
     const subject = listing
@@ -235,6 +444,8 @@ export default function ListingSidePanel({
   const mapsUrl = hasCoords
     ? `https://www.google.com/maps/search/?api=1&query=${listing!.lat},${listing!.lng}`
     : undefined;
+
+  const images = (Array.isArray(listing?.images) ? listing!.images : []).filter(Boolean);
 
   return createPortal(
     <>
@@ -290,40 +501,13 @@ export default function ListingSidePanel({
           }}
         >
           <div className="space-y-7">
-            {/* Hero (no price overlay anymore) */}
-            {listing?.images?.[0] ? (
-              <div className="relative -mx-4 sm:-mx-5">
-                <div className="relative overflow-hidden">
-                  <Image
-                    src={listing.images[0]}
-                    alt={titleText(listing)}
-                    width={1920}
-                    height={1080}
-                    className="block h-72 lg:h-80 w-full object-cover"
-                    unoptimized
-                    priority={false}
-                  />
-                  <div className="pointer-events-none absolute inset-0 ring-1 ring-inset ring-white/10" />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/35 via-black/0 to-black/0" />
-                </div>
-
-                {hasHeroStrip && (
-                  <div className="mt-2 flex gap-2 px-3">
-                    {listing!.images.slice(1, 6).map((src, i) => (
-                      <div
-                        key={`${src}-${i}`}
-                        className="relative aspect-[16/11] h-14 overflow-hidden rounded-md border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] cursor-pointer"
-                        onClick={(e) => e.stopPropagation()}
-                        title="More photos"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : null}
+            {/* Hero: Carousel (arrows + counter only) */}
+            {images.length > 0 && (
+              <ImageCarousel
+                images={images}
+                alt={titleText(listing || undefined)}
+              />
+            )}
 
             {/* Price + Title */}
             <div className="space-y-1 px-0.5">
@@ -370,12 +554,13 @@ export default function ListingSidePanel({
             </div>
 
             {/* — Divider + Actions (Maps chip styled like sources) — */}
-            {mapsUrl && (
+            {mapsUrl && listing && (
               <>
                 <Divider />
                 <SectionHeader>Actions</SectionHeader>
                 <div className="flex flex-wrap items-center gap-2">
                   <SourceChip item={{ name: "Google Maps", url: mapsUrl }} />
+                  <ActionCopyChip listing={listing} />
                 </div>
               </>
             )}

@@ -1,3 +1,4 @@
+// src/components/LeafletMap/MapGlobalStyles.tsx
 export default function MapGlobalStyles() {
   return (
     <style jsx global>{`
@@ -8,6 +9,9 @@ export default function MapGlobalStyles() {
         --pm-border: rgba(255,255,255,0.22);
         --pm-border-soft: rgba(255,255,255,0.14);
         --pm-zoom-ms: 300ms;
+
+        /* base alpha for cluster background */
+        --pm-cluster-alpha: 0.82;
       }
 
       .leaflet-container { background: #05080f; outline: none; }
@@ -34,6 +38,8 @@ export default function MapGlobalStyles() {
 
       .pm-icon.pm-marker { background: transparent; border: 0; }
       .pm-marker-box { position: relative; }
+
+      /* ————— Listing pill (no shadow) ————— */
       .pm-marker-pill {
         position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
         display: inline-flex; align-items: center; gap: 6px;
@@ -41,31 +47,49 @@ export default function MapGlobalStyles() {
         background: linear-gradient(180deg, rgba(255,255,255,.15) 0%, rgba(255,255,255,.06) 100%),
                     linear-gradient(135deg, var(--pm-brand-1) 0%, var(--pm-brand-2) 100%);
         border: 1px solid var(--pm-border); backdrop-filter: blur(2px);
-        box-shadow: 0 8px 18px rgba(0,0,0,.35);
+        box-shadow: none;
       }
       .pm-marker-price { font-weight: 900; font-size: 12.5px; letter-spacing: .15px; }
       .pm-marker-pill.is-highlighted {
         background: linear-gradient(135deg, #fb923c 0%, #f97316 45%, #ea580c 100%) !important;
         border-color: rgba(251,146,60,.95); color: #fff;
-        box-shadow: 0 0 0 2px rgba(251,146,60,.35), 0 10px 22px rgba(0,0,0,.45);
+        box-shadow: none;
         transform: translateX(-50%) scale(1.06);
       }
 
+      /* ————— Cluster pill (translucent, no shadow) ————— */
       .pm-cluster { background: transparent; border: 0; padding: 0; }
       .pm-cluster-outer { transform: translate(-50%, -100%); }
+
       .pm-cluster-pill {
+        position: relative;
         display: inline-flex; align-items: center; justify-content: center;
         height: 28px; padding: 0 12px; border-radius: 9999px;
-        border: 1px solid var(--pm-border); color: #eef2ff;
+        border: 1px solid var(--pm-border);
+        color: #eef2ff;
         font-weight: 800; font-size: 13px; letter-spacing: .15px;
-        background: radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.18), rgba(255,255,255,0) 60%),
-                    linear-gradient(135deg, var(--pm-brand-1) 0%, var(--pm-brand-2) 100%);
-        box-shadow: 0 8px 18px rgba(0,0,0,.35);
+        box-shadow: none;               /* ⬅ removed shadow */
+        z-index: 0;                     /* keep content above translucent bg */
       }
+      .pm-cluster-pill::before {
+        content: "";
+        position: absolute; inset: 0; border-radius: inherit;
+        background:
+          radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.18), rgba(255,255,255,0) 60%),
+          linear-gradient(135deg, var(--pm-brand-1) 0%, var(--pm-brand-2) 100%);
+        opacity: var(--pm-cluster-alpha);
+        backdrop-filter: blur(2px);
+        z-index: -1;
+      }
+
+      /* highlighted clusters stay solid / fully opaque (no shadow) */
       .pm-cluster-outer.is-highlighted .pm-cluster-pill {
+        border-color: rgba(251,146,60,.95);
+        box-shadow: none;               /* ⬅ removed shadow */
+      }
+      .pm-cluster-outer.is-highlighted .pm-cluster-pill::before {
         background: linear-gradient(135deg, #fb923c 0%, #f97316 45%, #ea580c 100%) !important;
-        border-color: rgba(251,146,60,.95); color: #fff;
-        box-shadow: 0 0 0 2px rgba(251,146,60,.35), 0 10px 22px rgba(0,0,0,.45);
+        opacity: 1;
       }
 
       .pm-popup .leaflet-popup-content { margin: 0 !important; padding: 0 !important; }
